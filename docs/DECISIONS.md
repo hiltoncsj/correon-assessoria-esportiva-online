@@ -7,3 +7,13 @@
 4. **Integrações:** a plataforma multiagentes roda na máquina do usuário e será colocada online; For All Sports já está online na LocalWeb. Integração só por API, sem banco compartilhado.
 5. **Gateway:** a definir depois; preferência declarada pelo usuário: InfinitePay. Nada será ativado sem aprovação; verificar se a InfinitePay oferece cobrança recorrente e webhooks assinados antes da Sprint 6.
 6. **Git:** o usuário criará um repositório remoto para sincronizar. Segredos (`.env`, `backend/config/*.php` reais) ficam fora do git.
+
+## 2026-11-24 — Sprint 1
+- Área logada em PHP puro (sem Composer): `backend/src` (namespace `Correon`), views em `backend/views`, migrações SQL idempotentes em `backend/migrations` (`php backend/bin/migrate.php`).
+- Perfis: `athlete`, `trainer`, `admin`. Cadastro público cria SOMENTE atleta; admin e treinador só por `backend/bin/create-user.php`.
+- Sessão: cookie HttpOnly/SameSite=Lax (Secure em produção), regeneração no login, expira em 2 h de inatividade / 12 h absolutas. CSRF em todo POST. CSP restritiva (sem scripts/estilos inline).
+- Senha: `password_hash` (bcrypt), mínimo 10 / máximo 72 bytes. Limite: 5 falhas por e-mail e 20 por IP em 15 min.
+- Recuperação: token aleatório de 256 bits, só o hash SHA-256 no banco, validade 1 h, uso único. Resposta idêntica exista ou não o e-mail.
+- Consentimento: registra aceite de Termos e Privacidade com versão `rascunho-0` (textos jurídicos ainda não existem; `/termos` e `/privacidade` mostram "em elaboração").
+- Limitação conhecida: após redefinir a senha, sessões já abertas continuam válidas até expirar (máx. 2 h ociosas). Melhorar na Sprint 5 (versão de sessão).
+- Limitação conhecida: o servidor atrás de proxy/CDN usaria o IP do proxy no limite de tentativas; hoje usa só REMOTE_ADDR.

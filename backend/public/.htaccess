@@ -1,0 +1,19 @@
+# Vai para public_html/ junto com o conteúdo de dist/ (Landing estática).
+Options -Indexes
+DirectoryIndex index.html
+
+<IfModule mod_rewrite.c>
+	RewriteEngine On
+
+	# Produção: força HTTPS (descomente após o SSL estar ativo)
+	# RewriteCond %{HTTPS} off
+	# RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+	# Rotas da aplicação PHP (a Landing continua estática)
+	RewriteRule ^(entrar|cadastro|recuperar-senha|redefinir-senha|sair|app|treinador|admin|termos|privacidade)(/.*)?$ app.php [L,QSA]
+</IfModule>
+
+# Nunca servir arquivos ocultos ou de configuração
+<FilesMatch "^\.(?!well-known)|\.(env|sql|log|md|bak)$">
+	Require all denied
+</FilesMatch>

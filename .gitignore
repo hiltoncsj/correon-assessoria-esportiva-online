@@ -22,3 +22,47 @@ pnpm-debug.log*
 
 # jetbrains setting folder
 .idea/
+
+# ---- Segredos e dados sensíveis (NUNCA versionar) ----
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.p12
+id_rsa*
+credentials*.json
+secrets/
+
+# FileZilla / deploy (guardam usuário e senha de FTP)
+filezilla.xml
+sitemanager.xml
+recentservers.xml
+*.ftpconfig
+.vscode/sftp.json
+
+# Backups e dumps de banco (contêm dados pessoais)
+*.sql.gz
+*.dump
+*.bak
+backups/
+dump*.sql
+!backend/migrations/*.sql
+
+# Backend: estado em runtime (sessões, logs, e-mails de teste, uploads)
+backend/storage/*
+!backend/storage/.gitkeep
+backend/uploads/
+*.log
+
+# Assets copiados do site (gerados por `npm run sync:app-assets`)
+backend/public/assets/tokens.css
+backend/public/assets/logo-correon.png
+
+# Dependências PHP e configs locais
+vendor/
+backend/config/local.php
+.claude/settings.local.json
+.DS_Store
+Thumbs.db

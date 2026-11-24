@@ -9,6 +9,7 @@
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
+    "sync:app-assets": "node scripts/sync-app-assets.mjs",
     "astro": "astro"
   },
   "dependencies": {
