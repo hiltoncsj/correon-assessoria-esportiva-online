@@ -17,3 +17,11 @@
 - Consentimento: registra aceite de Termos e Privacidade com versão `rascunho-0` (textos jurídicos ainda não existem; `/termos` e `/privacidade` mostram "em elaboração").
 - Limitação conhecida: após redefinir a senha, sessões já abertas continuam válidas até expirar (máx. 2 h ociosas). Melhorar na Sprint 5 (versão de sessão).
 - Limitação conhecida: o servidor atrás de proxy/CDN usaria o IP do proxy no limite de tentativas; hoje usa só REMOTE_ADDR.
+
+## 2026-11-24 — Sprint 2 (área do atleta)
+- Rotas do atleta: `/app` (dashboard), `/app/perfil`, `/app/senha`, e `/app/modalidades|treinos|treinador|assinaturas` como páginas "em breve". Nenhuma rota recebe id de usuário: todo acesso é ao próprio usuário da sessão (sem IDOR por construção).
+- Dashboard sem números inventados: modalidades, treinos, treinador e assinatura mostram o estado vazio real, pois ainda não há tabelas (Sprints 3, 4 e 6). Só "Minha conta" e "% do perfil preenchido" são dados reais.
+- Tabela `athlete_profiles`: telefone, nascimento (mín. 13 anos), cidade/UF, objetivo, histórico esportivo, contato de emergência. Não coleta dados de saúde (dado sensível; exigiria consentimento específico). Campos propostos por mim: revisar se faltam/sobram.
+- Auditoria do perfil guarda só os nomes dos campos, nunca os valores.
+- `users.session_version`: trocar ou redefinir a senha incrementa a versão e desconecta as demais sessões (fecha a limitação registrada na Sprint 1).
+- Alterar e-mail não está disponível (decisão futura: exige reconfirmação).

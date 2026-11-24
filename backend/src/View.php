@@ -20,6 +20,12 @@ final class View
         ob_start();
         require BASE_PATH . '/views/' . $view . '.php';
         $content = ob_get_clean();
+        if (!empty($shell)) {
+            $inner = $content;
+            ob_start();
+            require BASE_PATH . '/views/shell/' . $shell . '.php';
+            $content = ob_get_clean();
+        }
         $title = $title ?? 'CorreON';
         require BASE_PATH . '/views/layout/main.php';
         exit;

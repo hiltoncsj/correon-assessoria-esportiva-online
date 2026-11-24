@@ -20,7 +20,7 @@ if (!str_ends_with((string) Correon\Env::get('DB_NAME'), '_test')) {
 $php = PHP_BINARY;
 $pdo = Db::pdo();
 $pdo->exec('SET FOREIGN_KEY_CHECKS=0');
-foreach (['audit_log', 'consents', 'password_resets', 'rate_events', 'user_roles', 'users', 'schema_migrations'] as $t) {
+foreach (['athlete_profiles', 'audit_log', 'consents', 'password_resets', 'rate_events', 'user_roles', 'users', 'schema_migrations'] as $t) {
     $pdo->exec("DROP TABLE IF EXISTS $t"); // somente no banco de teste
 }
 $pdo->exec('DROP TABLE IF EXISTS roles');
@@ -220,6 +220,88 @@ preg_match('#/redefinir-senha/([0-9a-f]{64})#', (string) file_get_contents($mail
 Db::run('UPDATE password_resets SET expires_at = NOW() - INTERVAL 1 MINUTE');
 [$s] = $r2->req('GET', '/redefinir-senha/' . ($m2[1] ?? ''));
 check('token expirado = 410', $s === 410);
+
+echo "Sprint 2 — área do atleta\n";
+Db::run('DELETE FROM rate_events');
+$m1 = new Client();
+$m1->post('/entrar', ['email' => 'maria@example.com', 'password' => 'nova-senha-9999']);
+[$s, $b] = $m1->req('GET', '/app');
+check('dashboard do atleta = 200', $s === 200 && str_contains($b, 'Minha conta') && str_contains($b, 'Nenhum treino programado'));
+check('dashboard sem métricas ou valores inventados', !preg_match('/Treinos realizados|R\$ ?\d/', $b));
+foreach (['/app/perfil', '/app/modalidades', '/app/treinos', '/app/treinador', '/app/assinaturas', '/app/senha'] as $path) {
+    [$s] = $m1->req('GET', $path);
+    check("GET $path = 200", $s === 200, "status=$s");
+}
+[$s] = $trn->req('GET', '/app/perfil');
+check('treinador em /app/perfil = 403', $s === 403);
+[$s] = $adm->req('GET', '/app/senha');
+check('admin em /app/senha = 403', $s === 403);
+$anon = new Client();
+[$s] = $anon->req('GET', '/app/perfil');
+check('/app/perfil sem login redireciona', $s === 303 && $anon->header('Location') === '/entrar');
+[$s] = $anon->req('POST', '/app/perfil', ['name' => 'x']);
+check('POST /app/perfil sem login nem CSRF = 419', $s === 419);
+
+$base = ['name' => 'Maria Teste', 'phone' => '(11) 91234-5678', 'birth_date' => '1990-05-20', 'city' => 'Santos', 'state' => 'SP',
+    'goal' => 'Correr 10 km <b>sem parar</b>', 'sports_background' => '', 'emergency_name' => '', 'emergency_phone' => ''];
+foreach ([
+    'telefone inválido' => ['phone' => '123'],
+    'nascimento no futuro' => ['birth_date' => date('Y-m-d', strtotime('+1 day'))],
+    'menor de 13 anos' => ['birth_date' => date('Y-m-d', strtotime('-10 years'))],
+    'data inexistente' => ['birth_date' => '2020-02-31'],
+    'estado inválido' => ['state' => 'ZZ'],
+    'contato de emergência incompleto' => ['emergency_name' => 'João'],
+    'objetivo longo demais' => ['goal' => str_repeat('a', 501)],
+] as $label => $over) {
+    [$s] = $m1->post('/app/perfil', $over + $base);
+    check("perfil rejeita: $label (422)", $s === 422, "status=$s");
+}
+[$s] = $m1->post('/app/perfil', $base);
+check('perfil válido salva e redireciona', $s === 303 && $m1->header('Location') === '/app/perfil');
+$row = Db::one("SELECT p.phone, p.city, p.state, p.birth_date FROM athlete_profiles p JOIN users u ON u.id=p.user_id WHERE u.email='maria@example.com'");
+check('dados gravados (telefone só dígitos)', ($row['phone'] ?? '') === '11912345678' && ($row['city'] ?? '') === 'Santos' && ($row['birth_date'] ?? '') === '1990-05-20');
+[$s, $b] = $m1->req('GET', '/app/perfil');
+check('objetivo com HTML é escapado (XSS)', !str_contains($b, '<b>sem parar</b>') && str_contains($b, '&lt;b&gt;sem parar'));
+[$s, $b] = $m1->req('GET', '/app');
+check('completude real no dashboard (5 de 8 = 63%)', str_contains($b, '63% preenchido'));
+check('auditoria do perfil não grava valores pessoais', !Db::one("SELECT id FROM audit_log WHERE action='profile_updated' AND (details LIKE '%Santos%' OR details LIKE '%91234%')"));
+
+Db::run('DELETE FROM rate_events');
+$other = new Client();
+register($other, ['email' => 'joao@example.com', 'name' => 'João Outro']);
+[$s, $b] = $other->req('GET', '/app/perfil');
+check('outro atleta acessa o próprio perfil (200)', $s === 200, "status=$s");
+check('outro atleta não vê dados de Maria', !str_contains($b, 'value="Santos"') && !str_contains($b, '11912345678') && !str_contains($b, 'sem parar'));
+
+echo "Alterar senha e invalidação de sessões\n";
+$ses2 = new Client();
+Db::run('DELETE FROM rate_events');
+$ses2->post('/entrar', ['email' => 'maria@example.com', 'password' => 'nova-senha-9999']);
+[$s] = $ses2->req('GET', '/app');
+check('segunda sessão ativa antes da troca', $s === 200);
+[$s] = $m1->post('/app/senha', ['current' => 'errada-errada', 'password' => 'outra-senha-1234', 'password2' => 'outra-senha-1234']);
+check('senha atual errada = 422', $s === 422);
+[$s] = $m1->post('/app/senha', ['current' => 'nova-senha-9999', 'password' => 'curta', 'password2' => 'curta']);
+check('nova senha fraca = 422', $s === 422);
+[$s] = $m1->post('/app/senha', ['current' => 'nova-senha-9999', 'password' => 'outra-senha-1234', 'password2' => 'outra-senha-1234']);
+check('troca de senha bem-sucedida', $s === 303);
+[$s] = $m1->req('GET', '/app');
+check('sessão que trocou a senha continua válida', $s === 200);
+[$s] = $ses2->req('GET', '/app');
+check('OUTRA sessão aberta é desconectada', $s === 303 && $ses2->header('Location') === '/entrar');
+check('troca de senha auditada', (int) Db::one("SELECT COUNT(*) c FROM audit_log WHERE action='password_changed'")['c'] === 1);
+
+$ses3 = new Client();
+Db::run('DELETE FROM rate_events');
+$ses3->post('/entrar', ['email' => 'maria@example.com', 'password' => 'outra-senha-1234']);
+$ses4 = new Client();
+$ses4->post('/recuperar-senha', ['email' => 'maria@example.com']);
+$mails = glob(BASE_PATH . '/storage/mail/*.txt') ?: [];
+rsort($mails);
+preg_match('#/redefinir-senha/([0-9a-f]{64})#', (string) file_get_contents($mails[0]), $mm);
+$ses4->post("/redefinir-senha/{$mm[1]}", ['password' => 'final-senha-77777', 'password2' => 'final-senha-77777'], "/redefinir-senha/{$mm[1]}");
+[$s] = $ses3->req('GET', '/app');
+check('redefinição por e-mail também desconecta sessões abertas', $s === 303);
 
 echo "\nResultado: $pass ok, $fail falha(s)\n";
 exit($fail ? 1 : 0);

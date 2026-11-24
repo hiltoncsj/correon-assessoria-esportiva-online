@@ -35,7 +35,11 @@ final class App
             'GET /cadastro' => 'registerForm', 'POST /cadastro' => 'register',
             'GET /recuperar-senha' => 'forgotForm', 'POST /recuperar-senha' => 'forgot',
             'POST /sair' => 'logout',
-            'GET /app' => 'athleteHome', 'GET /treinador' => 'trainerHome', 'GET /admin' => 'adminHome',
+            'GET /app' => 'Athlete@dashboard', 'GET /app/perfil' => 'Athlete@profileForm', 'POST /app/perfil' => 'Athlete@profileSave',
+            'GET /app/senha' => 'Athlete@passwordForm', 'POST /app/senha' => 'Athlete@passwordSave',
+            'GET /app/modalidades' => 'soon:modalidades', 'GET /app/treinos' => 'soon:treinos',
+            'GET /app/treinador' => 'soon:treinador', 'GET /app/assinaturas' => 'soon:assinaturas',
+            'GET /treinador' => 'trainerHome', 'GET /admin' => 'adminHome',
             'GET /termos' => 'terms', 'GET /privacidade' => 'privacy',
         ];
         if (preg_match('#^/redefinir-senha/([0-9a-f]{64})$#', $path, $m)) {
@@ -46,6 +50,14 @@ final class App
         if ($h === null) {
             self::notFound();
         }
+        if (str_starts_with($h, 'soon:')) {
+            Athlete::soon(substr($h, 5));
+        }
+        if (str_contains($h, '@')) {
+            [$cls, $fn] = explode('@', $h);
+            $class = __NAMESPACE__ . '\\' . $cls;
+            $class::$fn();
+        }
         self::$h();
     }
 
@@ -55,7 +67,7 @@ final class App
     }
 
     /** Exige login e perfil. Autorização sempre aqui, no servidor. */
-    private static function require(string $role): array
+    public static function require(string $role): array
     {
         $u = Auth::user();
         if ($u === null) {
@@ -247,7 +259,7 @@ final class App
                 $pdo->rollBack();
                 View::render('auth/reset_invalid', ['title' => 'Link inválido'], 410);
             }
-            Db::run('UPDATE users SET password_hash = ? WHERE id = ?', [password_hash($pass, PASSWORD_DEFAULT), $row['user_id']]);
+            Db::run('UPDATE users SET password_hash = ?, session_version = session_version + 1 WHERE id = ?', [password_hash($pass, PASSWORD_DEFAULT), $row['user_id']]);
             Db::run('UPDATE password_resets SET used_at = NOW() WHERE user_id = ? AND used_at IS NULL', [$row['user_id']]);
             $pdo->commit();
         } catch (\Throwable $e) {
@@ -262,13 +274,6 @@ final class App
     }
 
     // ---- Áreas por perfil (esqueleto da Sprint 1; conteúdo real nas próximas sprints) ----
-
-    private static function athleteHome(): never
-    {
-        $u = self::require('athlete');
-        View::render('dash/area', ['title' => 'Minha área', 'heading' => 'Minha área', 'role' => 'Atleta', 'u' => $u,
-            'note' => 'O painel do atleta (treinos, modalidades, assinaturas) será liberado nas próximas etapas.']);
-    }
 
     private static function trainerHome(): never
     {

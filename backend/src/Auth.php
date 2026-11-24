@@ -20,8 +20,8 @@ final class Auth
         $id = $_SESSION['uid'] ?? null;
         $user = null;
         if (is_int($id)) {
-            $row = Db::one("SELECT id, name, email, status FROM users WHERE id = ?", [$id]);
-            if ($row && $row['status'] === 'active') {
+            $row = Db::one("SELECT id, name, email, status, session_version FROM users WHERE id = ?", [$id]);
+            if ($row && $row['status'] === 'active' && (int) $row['session_version'] === (int) ($_SESSION['sv'] ?? 0)) {
                 $row['roles'] = array_column(
                     Db::all('SELECT r.slug FROM user_roles ur JOIN roles r ON r.id = ur.role_id WHERE ur.user_id = ?', [$id]),
                     'slug'
@@ -54,6 +54,7 @@ final class Auth
     {
         session_regenerate_id(true);
         $_SESSION['uid'] = $userId;
+        $_SESSION['sv'] = (int) (Db::one('SELECT session_version v FROM users WHERE id = ?', [$userId])['v'] ?? 1);
         $_SESSION['csrf'] = bin2hex(random_bytes(32));
         self::$cached = false;
         Db::run('UPDATE users SET last_login_at = NOW() WHERE id = ?', [$userId]);
