@@ -25,3 +25,4 @@
 - Auditoria do perfil guarda só os nomes dos campos, nunca os valores.
 - `users.session_version`: trocar ou redefinir a senha incrementa a versão e desconecta as demais sessões (fecha a limitação registrada na Sprint 1).
 - Alterar e-mail não está disponível (decisão futura: exige reconfirmação).
+- Alterar senha (logado) NÃO pede a senha atual, por decisão do cliente. Risco aceito: quem tiver uma sessão aberta (aparelho emprestado/roubado) pode trocar a senha e tomar a conta. Compensações: limite de 5 trocas/15 min, desconexão das demais sessões, auditoria `password_changed` e aviso por e-mail ao dono da conta.

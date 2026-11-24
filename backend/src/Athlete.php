@@ -140,25 +140,27 @@ final class Athlete
         if (RateLimiter::tooMany('pwchange', (string) $id, 5, 900)) {
             $render('Muitas tentativas. Aguarde alguns minutos.', 429);
         }
-        $cur = (string) ($_POST['current'] ?? '');
+        // Decisão do cliente: usuário já logado troca a senha sem digitar a atual.
+        // Compensações: limite de trocas, desconexão das outras sessões, auditoria e aviso por e-mail.
         $new = (string) ($_POST['password'] ?? '');
         $row = Db::one('SELECT password_hash FROM users WHERE id = ?', [$id]);
-        if (!$row || !password_verify($cur, $row['password_hash'])) {
-            RateLimiter::hit('pwchange', (string) $id);
-            Audit::log('password_change_failed', $id, 'user', $id);
-            $render('A senha atual está incorreta.', 422);
-        }
         $err = Auth::passwordError($new) ?? ($new !== (string) ($_POST['password2'] ?? '') ? 'As senhas não conferem.' : null);
-        if ($err === null && hash_equals($cur, $new)) {
+        if ($err === null && $row && password_verify($new, $row['password_hash'])) {
             $err = 'A nova senha deve ser diferente da atual.';
         }
         if ($err !== null) {
             $render($err, 422);
         }
+        RateLimiter::hit('pwchange', (string) $id);
         Db::run('UPDATE users SET password_hash = ?, session_version = session_version + 1 WHERE id = ?', [password_hash($new, PASSWORD_DEFAULT), $id]);
-        RateLimiter::clear('pwchange', (string) $id);
         Auth::login($id); // nova sessão com a versão atual; as outras sessões deixam de valer
         Audit::log('password_changed', $id, 'user', $id);
+        Mailer::send((string) $u['email'], 'CorreON — sua senha foi alterada',
+            "Olá, {$u['name']}.
+
+A senha da sua conta CorreON foi alterada em " . date('d/m/Y H:i') . ".
+"
+            . "Se não foi você, recupere o acesso em " . rtrim((string) Env::get('APP_URL', ''), '/') . "/recuperar-senha e avise a CorreON.");
         Http::flash('ok', 'Senha alterada. Os outros dispositivos foram desconectados.');
         Http::redirect('/app/senha');
     }
