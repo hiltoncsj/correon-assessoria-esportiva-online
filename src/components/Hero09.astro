@@ -1,0 +1,123 @@
+---
+import { Image } from 'astro:assets';
+import heroImage from '../assets/hero9-imagem1.jpeg';
+import logo from '../assets/logo-correon.png';
+
+// Hero 09 — encerramento: imagem, mensagem e chamada para ação
+// (CORREON_DESIGN_SYSTEM_MASTER.md §8). TODO: texto de apoio e CTA aprovados no briefing.
+const title = 'O SEU PRÓXIMO NÍVEL COMEÇA AGORA.';
+const text = 'TODO Texto de apoio à chamada para ação.';
+const cta = { label: 'QUERO FAZER PARTE', href: '#contato' };
+---
+
+<section class="closing" aria-labelledby="closing-title" id="contato">
+	<div class="closing__media">
+		<Image
+			src={heroImage}
+			alt=""
+			widths={[640, 960, 1280, 1670]}
+			sizes="100vw"
+			loading="lazy"
+			decoding="async"
+		/>
+	</div>
+
+	<div class="closing__inner">
+		<Image class="closing__logo" src={logo} alt="CorreON" width={240} loading="lazy" />
+		<h2 id="closing-title" class="closing__title">{title}</h2>
+		<p class="closing__text">{text}</p>
+		<a class="closing__cta" href={cta.href}>{cta.label}</a>
+	</div>
+</section>
+
+<style>
+	.closing {
+		position: relative;
+		isolation: isolate;
+		display: grid;
+		place-items: center;
+		min-height: 80svh;
+		overflow: clip;
+		text-align: center;
+		background: var(--color-background-primary);
+		color: var(--color-text-primary);
+	}
+	/* A imagem é decorativa aqui (alt vazio): a mensagem está no texto */
+	.closing__media {
+		position: absolute;
+		inset: 0;
+		z-index: -2;
+	}
+	.closing__media :global(img) {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		object-position: center;
+	}
+	/* Véu mais leve que o --color-overlay (82%) para a foto aparecer um pouco mais */
+	.closing {
+		--closing-veil: color-mix(in srgb, var(--color-brand-dark) 68%, transparent);
+	}
+	.closing::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		z-index: -1;
+		background: linear-gradient(to bottom, var(--color-background-primary) 0%, var(--closing-veil) 40%, var(--closing-veil) 70%, var(--color-background-primary) 100%);
+	}
+
+	.closing__inner {
+		max-width: 44rem;
+		padding: clamp(3rem, 10vw, 6rem) var(--layout-gutter);
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: var(--space-lg);
+	}
+	.closing__inner :global(.closing__logo) {
+		width: clamp(9rem, 30vw, 15rem);
+		height: auto;
+	}
+	.closing__title {
+		margin: 0;
+		font: 800 clamp(2rem, 6vw, 4rem) / 1 var(--font-display);
+		letter-spacing: -0.02em;
+		text-transform: uppercase;
+		text-wrap: balance;
+	}
+	.closing__text {
+		margin: 0;
+		max-width: 32rem;
+		font: 400 var(--text-body) / 1.6 var(--font-body);
+		color: var(--color-text-secondary);
+	}
+	.closing__cta {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-height: 3.25rem;
+		padding: 0 calc(var(--space-xl) * 1.2);
+		border-radius: var(--radius-pill);
+		background: var(--color-accent);
+		color: var(--color-on-accent);
+		font: var(--font-weight-button) var(--text-button) / 1 var(--font-button);
+		letter-spacing: var(--letter-spacing-label);
+		text-transform: uppercase;
+		text-decoration: none;
+		transition: background-color var(--motion-duration-fast) var(--motion-ease),
+			transform var(--motion-duration-fast) var(--motion-ease);
+	}
+	.closing__cta:hover {
+		background: var(--color-text-primary);
+	}
+	.closing__cta:focus-visible {
+		outline: 2px solid var(--color-text-primary);
+		outline-offset: 3px;
+	}
+
+	@media (max-height: 30rem) and (orientation: landscape) {
+		.closing {
+			min-height: 100svh;
+		}
+	}
+</style>

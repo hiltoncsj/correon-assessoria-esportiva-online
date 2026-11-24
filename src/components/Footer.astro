@@ -1,0 +1,172 @@
+---
+import { Image } from 'astro:assets';
+import logo from '../assets/logo-correon.png';
+import bg from '../assets/hero10-imagem1.jpeg';
+
+// Footer — marca, links e informações institucionais
+// (CORREON_DESIGN_SYSTEM_MASTER.md §8). TODO: substituir pelos links, contatos
+// e textos legais aprovados no briefing. Nada foi inventado.
+const tagline = 'Conecte-se, corra, evolua!';
+const columns = [
+	{
+		title: 'NAVEGAÇÃO',
+		links: [
+			{ label: 'Início', href: '#top' },
+			{ label: 'Sobre', href: '#sobre' },
+			{ label: 'Planos', href: '#planos' },
+		],
+	},
+	{
+		title: 'CONTATO',
+		links: [
+			{ label: 'Whatsapp', href: '#' }, // TODO: link oficial do WhatsApp
+			{ label: 'Instagram', href: '#' }, // TODO: link oficial do Instagram
+		],
+	},
+];
+const year = new Date().getFullYear();
+const legal = 'TODO Razão social / informações legais';
+---
+
+<footer class="footer">
+	<div class="footer__main">
+		<div class="footer__media">
+			<Image src={bg} alt="" widths={[640, 960, 1280]} sizes="100vw" loading="lazy" decoding="async" />
+		</div>
+	<div class="footer__inner">
+		<div class="footer__brand">
+			<a href="/" aria-label="CorreON — página inicial">
+				<Image class="footer__logo" src={logo} alt="CorreON" width={200} loading="lazy" />
+			</a>
+			<p class="footer__tagline">{tagline}</p>
+		</div>
+
+		{columns.map((col, i) => (
+			<nav class="footer__col" aria-labelledby={`footer-col-${i}`}>
+				<h2 id={`footer-col-${i}`} class="footer__heading">{col.title}</h2>
+				<ul>
+					{col.links.map((l) => (
+						<li><a href={l.href}>{l.label}</a></li>
+					))}
+				</ul>
+			</nav>
+		))}
+	</div>
+	</div>
+
+	<div class="footer__bottom">
+		<p>© {year} CorreON. {legal}</p>
+		<a class="footer__top" href="#top">Voltar ao topo</a>
+	</div>
+</footer>
+
+<style>
+	.footer {
+		background: var(--color-background-primary);
+		color: var(--color-text-primary);
+	}
+	/* Faixa da logo e dos links, em largura total, com a imagem de fundo */
+	.footer__main {
+		position: relative;
+		isolation: isolate;
+		overflow: clip;
+	}
+	.footer__media {
+		position: absolute;
+		inset: 0;
+		z-index: -1;
+	}
+	.footer__media :global(img) {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+	}
+	.footer__inner {
+		max-width: var(--layout-max-width);
+		margin: 0 auto;
+		padding: clamp(2.5rem, 8vw, 5rem) var(--layout-gutter);
+		display: grid;
+		gap: var(--space-xl);
+	}
+	.footer__brand {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-md);
+		align-items: flex-start;
+	}
+	.footer__brand a {
+		border-radius: var(--radius-sm);
+	}
+	.footer__brand :global(.footer__logo) {
+		width: clamp(9rem, 40vw, 12.5rem);
+		height: auto;
+	}
+	.footer__tagline {
+		margin: 0;
+		max-width: 22rem;
+		font: 400 var(--text-body) / 1.6 var(--font-body);
+		color: var(--color-text-secondary);
+	}
+
+	.footer__heading {
+		margin: 0 0 var(--space-md);
+		font: var(--font-weight-label) var(--text-label) / 1.2 var(--font-label);
+		letter-spacing: var(--letter-spacing-label);
+		text-transform: uppercase;
+		color: var(--color-accent);
+	}
+	.footer__col ul {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: grid;
+		gap: var(--space-xs);
+	}
+	.footer__col a {
+		display: inline-block;
+		padding: var(--space-2xs) 0;
+		color: var(--color-text-secondary);
+		text-decoration: none;
+		transition: color var(--motion-duration-fast) var(--motion-ease);
+	}
+	.footer__col a:hover {
+		color: var(--color-text-primary);
+		text-decoration: underline;
+		text-decoration-color: var(--color-accent);
+		text-underline-offset: 0.3em;
+	}
+
+	.footer__bottom {
+		max-width: var(--layout-max-width);
+		margin: 0 auto;
+		padding: var(--space-lg) var(--layout-gutter);
+		border-top: 1px solid var(--color-border-subtle);
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-sm) var(--space-lg);
+		justify-content: space-between;
+		font: 400 var(--text-label) / 1.5 var(--font-body);
+		color: var(--color-text-secondary);
+	}
+	.footer__bottom p {
+		margin: 0;
+	}
+	.footer__top {
+		color: var(--color-text-secondary);
+		text-decoration: none;
+	}
+	.footer__top:hover {
+		color: var(--color-accent);
+	}
+
+	a:focus-visible {
+		outline: 2px solid var(--color-accent);
+		outline-offset: 3px;
+	}
+
+	@media (min-width: 48rem) {
+		.footer__inner {
+			grid-template-columns: 1.5fr repeat(2, 1fr);
+		}
+	}
+</style>

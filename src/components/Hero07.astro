@@ -1,0 +1,645 @@
+---
+import { Image } from 'astro:assets';
+import imgResultados from '../assets/hero7-corrida-urbana.png';
+import imgNoticias from '../assets/hero7-equipe-por-do-sol.png';
+import imgEventos from '../assets/hero7-selfie-praia.png';
+import { results, news, events, type EventStatus } from '../data/comunidade';
+
+// Hero 07 — vitrine da comunidade CorreON: Resultados, Notícias e Eventos.
+// Conteúdo vem de src/data/comunidade.ts (listas vazias = estado vazio; nada
+// é inventado). Sem JS, as três áreas aparecem empilhadas.
+const eyebrow = 'SEÇÃO 7';
+const title = 'Resultados que inspiram. Conquistas que movem.';
+const text =
+	'Cada treino constrói uma história. Cada conquista representa uma evolução. Acompanhe os resultados dos nossos atletas, as novidades da CorreON e os próximos desafios da nossa comunidade.';
+
+const fmtDate = (iso: string) =>
+	new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' }).format(
+		new Date(iso),
+	);
+
+// Eventos: próximos (data crescente) e realizados (mais recentes primeiro).
+const today = new Date();
+today.setUTCHours(0, 0, 0, 0);
+const statusOf = (e: (typeof events)[number]): EventStatus =>
+	e.status ?? (new Date(e.date) < today ? 'realizado' : 'proximo');
+const statusLabel: Record<EventStatus, string> = {
+	proximo: 'Próximo',
+	andamento: 'Em andamento',
+	realizado: 'Realizado',
+};
+const upcoming = events
+	.filter((e) => statusOf(e) !== 'realizado')
+	.sort((a, b) => a.date.localeCompare(b.date));
+const past = events
+	.filter((e) => statusOf(e) === 'realizado')
+	.sort((a, b) => b.date.localeCompare(a.date));
+
+const tabs = [
+	{
+		id: 'resultados',
+		label: 'Resultados',
+		image: imgResultados,
+		alt: 'Duas corredoras com uniforme CorreON correndo lado a lado em uma avenida com palmeiras, com outros corredores ao fundo',
+		empty: 'Os resultados dos atletas CorreON serão publicados aqui.',
+	},
+	{
+		id: 'noticias',
+		label: 'Notícias',
+		image: imgNoticias,
+		alt: 'Cinco integrantes da equipe CorreON uniformizados, lado a lado, em uma praça à beira-mar ao pôr do sol',
+		empty: 'As novidades da CorreON serão publicadas aqui.',
+	},
+	{
+		id: 'eventos',
+		label: 'Eventos',
+		image: imgEventos,
+		alt: 'Dois integrantes da CorreON sorrindo em uma selfie na praia ao pôr do sol, um deles flexionando os braços',
+		empty: 'Os próximos eventos serão divulgados aqui.',
+	},
+];
+---
+
+<section class="comm" id="movimento" aria-labelledby="comm-title" data-comm>
+	<div class="comm__inner">
+		<header class="comm__head">
+			<p class="comm__eyebrow">{eyebrow}</p>
+			<h2 id="comm-title" class="comm__title">{title}</h2>
+			<p class="comm__text">{text}</p>
+		</header>
+
+		<div class="comm__tabs" role="tablist" aria-label="Resultados, notícias e eventos" data-tabs>
+			{tabs.map((t, i) => (
+				<button
+					class="comm__tab"
+					role="tab"
+					type="button"
+					id={`comm-tab-${t.id}`}
+					aria-controls={`comm-panel-${t.id}`}
+					aria-selected={i === 0 ? 'true' : 'false'}
+					tabindex={i === 0 ? 0 : -1}
+				>
+					{t.label}
+				</button>
+			))}
+		</div>
+
+		<div class="comm__panels">
+			{tabs.map((t, i) => (
+				<div
+					class="comm__panel"
+					role="tabpanel"
+					id={`comm-panel-${t.id}`}
+					aria-labelledby={`comm-tab-${t.id}`}
+					data-active={i === 0 ? 'true' : 'false'}
+				>
+					<figure class="comm__figure">
+						<Image
+							src={t.image}
+							alt={t.alt}
+							widths={[480, 800, 1080]}
+							sizes="(min-width: 64rem) 40vw, 100vw"
+							loading={i === 0 ? 'eager' : 'lazy'}
+							decoding="async"
+						/>
+						<figcaption class="comm__figcaption" aria-hidden="true">{t.label}</figcaption>
+					</figure>
+
+					<div class="comm__content">
+						{/* ---------- RESULTADOS ---------- */}
+						{t.id === 'resultados' && results.length > 0 && (
+							<ul class="cards">
+								{results.map((r, k) => (
+									<li class:list={['card', { 'card--featured': k === 0 }]}>
+										{r.image && (
+											<Image class="card__img" src={r.image} alt={r.imageAlt ?? r.athlete} widths={[400, 800]} sizes="(min-width: 64rem) 30vw, 100vw" loading="lazy" decoding="async" />
+										)}
+										<div class="card__body">
+											<p class="card__meta">{r.modality} · {fmtDate(r.date)}</p>
+											<h3 class="card__title">{r.athlete}</h3>
+											<p class="card__sub">{r.competition}{r.distance ? ` · ${r.distance}` : ''}</p>
+											<p class="card__result">{r.result}</p>
+											{r.placement && <p class="card__sub">{r.placement}</p>}
+											{r.text && <p class="card__text">{r.text}</p>}
+											{r.href && <a class="card__link" href={r.href}>Ver conquista</a>}
+										</div>
+									</li>
+								))}
+							</ul>
+						)}
+
+						{/* ---------- NOTÍCIAS ---------- */}
+						{t.id === 'noticias' && news.length > 0 && (
+							<ul class="cards">
+								{news.map((n, k) => (
+									<li class:list={['card', { 'card--featured': k === 0 }]}>
+										{n.image && (
+											<Image class="card__img" src={n.image} alt={n.imageAlt ?? n.title} widths={[400, 800]} sizes="(min-width: 64rem) 30vw, 100vw" loading="lazy" decoding="async" />
+										)}
+										<div class="card__body">
+											<p class="card__meta">{n.category} · {fmtDate(n.date)}</p>
+											<h3 class="card__title">{n.title}</h3>
+											<p class="card__text">{n.summary}</p>
+											{n.href && <a class="card__link" href={n.href}>Ler notícia</a>}
+										</div>
+									</li>
+								))}
+							</ul>
+						)}
+
+						{/* ---------- EVENTOS ---------- */}
+						{t.id === 'eventos' && events.length > 0 && (
+							<div class="agenda">
+								{[
+									{ heading: 'Próximos eventos', list: upcoming },
+									{ heading: 'Eventos realizados', list: past },
+								]
+									.filter((g) => g.list.length > 0)
+									.map((g) => (
+										<section class="agenda__group" aria-label={g.heading}>
+											<h3 class="agenda__heading">{g.heading}</h3>
+											<ul class="cards">
+												{g.list.map((e, k) => (
+													<li class:list={['card', { 'card--featured': k === 0 && g.list === upcoming }]}>
+														{e.image && (
+															<Image class="card__img" src={e.image} alt={e.imageAlt ?? e.name} widths={[400, 800]} sizes="(min-width: 64rem) 30vw, 100vw" loading="lazy" decoding="async" />
+														)}
+														<div class="card__body">
+															<p class="card__meta">
+																<span class="card__status">{statusLabel[statusOf(e)]}</span>
+																{e.modality}
+															</p>
+															<h4 class="card__title">{e.name}</h4>
+															<p class="card__sub">{fmtDate(e.date)}{e.time ? ` · ${e.time}` : ''} · {e.place}</p>
+															{e.description && <p class="card__text">{e.description}</p>}
+															<div class="card__actions">
+																{e.registrationHref && statusOf(e) !== 'realizado' && (
+																	<a class="card__link" href={e.registrationHref}>Inscrever-se</a>
+																)}
+																{e.href && <a class="card__link" href={e.href}>Ver evento</a>}
+															</div>
+														</div>
+													</li>
+												))}
+											</ul>
+										</section>
+									))}
+							</div>
+						)}
+
+						{/* ---------- ESTADO VAZIO ---------- */}
+						{((t.id === 'resultados' && results.length === 0) ||
+							(t.id === 'noticias' && news.length === 0) ||
+							(t.id === 'eventos' && events.length === 0)) && (
+							<div class="comm__empty">
+								<p class="comm__empty-tag">Em breve</p>
+								<p class="comm__empty-text">{t.empty}</p>
+							</div>
+						)}
+					</div>
+				</div>
+			))}
+		</div>
+	</div>
+</section>
+
+<style>
+	.comm {
+		background: var(--color-background-secondary);
+		color: var(--color-text-primary);
+		padding-block: clamp(3rem, 10vw, 7rem);
+	}
+	.comm__inner {
+		max-width: var(--layout-max-width);
+		margin: 0 auto;
+		padding: 0 var(--layout-gutter);
+		display: grid;
+		gap: var(--space-lg);
+	}
+	.comm__head {
+		max-width: 48rem;
+	}
+	.comm__eyebrow {
+		margin: 0 0 var(--space-sm);
+		font: var(--font-weight-label) var(--text-label) / 1.2 var(--font-label);
+		letter-spacing: var(--letter-spacing-label);
+		text-transform: uppercase;
+		color: var(--color-accent);
+	}
+	.comm__title {
+		margin: 0 0 var(--space-md);
+		font: 800 clamp(1.75rem, 4.5vw, 3.25rem) / 1.05 var(--font-heading);
+		letter-spacing: -0.02em;
+		text-transform: uppercase;
+		text-wrap: balance;
+	}
+	.comm__text {
+		margin: 0;
+		font: 400 var(--text-body) / 1.6 var(--font-body);
+		color: var(--color-text-secondary);
+	}
+
+	/* Abas: ocultas sem JS (as três áreas aparecem empilhadas) */
+	.comm__tabs {
+		display: none;
+		gap: var(--space-xs);
+		overflow-x: auto;
+		border-bottom: 1px solid var(--color-border-subtle);
+	}
+	:global(html.js) .comm__tabs {
+		display: flex;
+	}
+	.comm__tab {
+		flex: none;
+		min-height: 2.75rem;
+		padding: 0 var(--space-md);
+		background: none;
+		border: 0;
+		border-bottom: 3px solid transparent;
+		color: var(--color-text-secondary);
+		font: var(--font-weight-label) var(--text-label) / 1 var(--font-label);
+		letter-spacing: var(--letter-spacing-label);
+		text-transform: uppercase;
+		cursor: pointer;
+		transition: color var(--motion-duration-fast) var(--motion-ease),
+			border-color var(--motion-duration-fast) var(--motion-ease);
+	}
+	.comm__tab:hover,
+	.comm__tab[aria-selected='true'] {
+		color: var(--color-text-primary);
+	}
+	.comm__tab[aria-selected='true'] {
+		border-bottom-color: var(--color-accent);
+	}
+	.comm__tab:focus-visible {
+		outline: 2px solid var(--color-accent);
+		outline-offset: -2px;
+	}
+
+	.comm__panels {
+		display: grid;
+		gap: var(--space-xl);
+	}
+	.comm__panel {
+		display: grid;
+		gap: var(--space-lg);
+	}
+	:global(html.js) .comm__panel[data-active='false'] {
+		display: none;
+	}
+	@media (prefers-reduced-motion: no-preference) {
+		:global(html.js) .comm__panel[data-active='true'] {
+			animation: comm-in var(--motion-duration-base) var(--motion-ease) both;
+		}
+	}
+	@keyframes comm-in {
+		from { opacity: 0; transform: translateY(0.75rem); }
+	}
+
+	.comm__figure {
+		position: relative;
+		margin: 0;
+		aspect-ratio: 4 / 3;
+		overflow: hidden;
+		border-radius: var(--radius-sm);
+	}
+	.comm__figure :global(img) {
+		display: block;
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		object-position: center 25%; /* preserva rostos nos recortes */
+	}
+	.comm__figure::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		background: linear-gradient(to top, var(--color-overlay) 0%, transparent 45%);
+		pointer-events: none;
+	}
+	.comm__figcaption {
+		position: absolute;
+		left: var(--space-lg);
+		bottom: var(--space-lg);
+		z-index: 1;
+		font: 800 clamp(1.5rem, 3vw, 2.25rem) / 1 var(--font-display);
+		letter-spacing: -0.02em;
+		text-transform: uppercase;
+	}
+
+	/* Estado vazio */
+	.comm__empty {
+		display: grid;
+		gap: var(--space-sm);
+		align-content: center;
+		min-height: 12rem;
+		padding: var(--space-lg);
+		border: 1px dashed var(--color-border-subtle);
+		border-radius: var(--radius-sm);
+	}
+	.comm__empty-tag {
+		justify-self: start;
+		margin: 0;
+		padding: var(--space-2xs) var(--space-sm);
+		border-radius: var(--radius-pill);
+		background: var(--color-accent);
+		color: var(--color-on-accent);
+		font: var(--font-weight-label) var(--text-label) / 1.2 var(--font-label);
+		letter-spacing: var(--letter-spacing-label);
+		text-transform: uppercase;
+	}
+	.comm__empty-text {
+		margin: 0;
+		max-width: 28rem;
+		font: 400 var(--text-body) / 1.6 var(--font-body);
+		color: var(--color-text-secondary);
+	}
+
+	/* Cards de conteúdo */
+	.agenda {
+		display: grid;
+		gap: var(--space-xl);
+	}
+	.agenda__heading {
+		margin: 0 0 var(--space-md);
+		font: var(--font-weight-label) var(--text-label) / 1.2 var(--font-label);
+		letter-spacing: var(--letter-spacing-label);
+		text-transform: uppercase;
+		color: var(--color-accent);
+	}
+	.cards {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+		gap: var(--space-md);
+	}
+	.card {
+		display: flex;
+		flex-direction: column;
+		background: var(--color-background-primary);
+		border: 1px solid var(--color-border-subtle);
+		border-radius: var(--radius-sm);
+		overflow: hidden;
+	}
+	.card--featured {
+		grid-column: 1 / -1;
+		border-color: var(--color-accent);
+	}
+	.card :global(.card__img) {
+		display: block;
+		width: 100%;
+		height: auto; /* o height do <img> gerado pelo Astro vencia o aspect-ratio */
+		aspect-ratio: 16 / 9;
+		object-fit: cover;
+		object-position: center 25%;
+	}
+	.card__body {
+		display: grid;
+		gap: var(--space-xs);
+		padding: var(--space-md) var(--space-lg) var(--space-lg);
+		align-content: start;
+	}
+	.card__meta {
+		margin: 0;
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-xs);
+		align-items: center;
+		font: var(--font-weight-label) var(--text-label) / 1.2 var(--font-label);
+		letter-spacing: var(--letter-spacing-label);
+		text-transform: uppercase;
+		color: var(--color-text-secondary);
+	}
+	.card__status {
+		padding: var(--space-2xs) var(--space-sm);
+		border-radius: var(--radius-pill);
+		border: 1px solid var(--color-accent);
+		color: var(--color-accent);
+	}
+	.card__title {
+		margin: 0;
+		font: 800 1.375rem / 1.15 var(--font-heading);
+		text-transform: uppercase;
+	}
+	.card--featured .card__title {
+		font-size: clamp(1.5rem, 3vw, 2rem);
+	}
+	.card__sub {
+		margin: 0;
+		color: var(--color-text-secondary);
+	}
+	.card__result {
+		margin: var(--space-xs) 0 0;
+		font: 800 clamp(1.75rem, 4vw, 2.5rem) / 1 var(--font-display);
+		color: var(--color-accent);
+	}
+	.card__text {
+		margin: 0;
+		line-height: 1.6;
+		color: var(--color-text-secondary);
+	}
+	.card__actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-md);
+	}
+	.card__link {
+		justify-self: start;
+		margin-top: var(--space-xs);
+		min-height: 2.75rem;
+		display: inline-flex;
+		align-items: center;
+		color: var(--color-accent);
+		font: var(--font-weight-button) var(--text-button) / 1 var(--font-button);
+		letter-spacing: var(--letter-spacing-label);
+		text-transform: uppercase;
+		text-decoration: underline;
+		text-underline-offset: 0.35em;
+	}
+	.card__link:hover {
+		color: var(--color-text-primary);
+	}
+	.card__link:focus-visible {
+		outline: 2px solid var(--color-text-primary);
+		outline-offset: 3px;
+	}
+
+	@media (min-width: 64rem) {
+		.comm__panel {
+			grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+			align-items: start;
+			gap: var(--space-xl);
+		}
+		.comm__figure {
+			aspect-ratio: 4 / 5;
+			position: sticky;
+			top: calc(var(--header-height) + var(--space-lg));
+		}
+	}
+
+	/* Modo rolagem: a seção fica fixa na tela e a rolagem para baixo troca de
+	   aba (Resultados → Notícias → Eventos). Ativado por script, só sem movimento
+	   reduzido e em telas com altura suficiente. Conteúdo maior que a tela rola
+	   dentro da própria área, então nada é cortado. */
+	.comm.is-scroll {
+		height: calc(var(--n) * 85svh + 15svh);
+		padding-block: 0;
+	}
+	.comm.is-scroll .comm__inner {
+		position: sticky;
+		top: var(--header-height);
+		/* o padding vertical é descontado da altura: a seção não passa do fim da tela */
+		height: calc(100svh - var(--header-height) - 2 * var(--space-md));
+		padding-block: var(--space-md);
+		gap: var(--space-md);
+		grid-template-rows: auto auto minmax(0, 1fr);
+		align-content: stretch;
+		overflow: hidden;
+	}
+	.comm.is-scroll .comm__panels {
+		min-height: 0;
+		gap: 0;
+	}
+	.comm.is-scroll .comm__panel {
+		height: 100%;
+		min-height: 0;
+		grid-template-rows: auto minmax(0, 1fr);
+		gap: var(--space-md);
+	}
+	.comm.is-scroll .comm__figure {
+		position: relative;
+		top: auto;
+		aspect-ratio: auto;
+		height: min(24svh, 14rem);
+	}
+	.comm.is-scroll .comm__content {
+		min-height: 0;
+		overflow-y: auto;
+		overscroll-behavior: auto;
+	}
+	.comm.is-scroll .comm__empty {
+		min-height: 0;
+		padding: var(--space-md) var(--space-lg);
+	}
+	/* Janelas baixas (notebook com zoom): cabeçalho compacto para o conteúdo caber */
+	@media (max-height: 40rem) {
+		.comm.is-scroll .comm__title {
+			font-size: clamp(1.25rem, 4.5vw, min(3.25rem, 7svh));
+			margin-bottom: var(--space-xs);
+		}
+		.comm.is-scroll .comm__text {
+			font-size: 0.875rem;
+			line-height: 1.4;
+		}
+		.comm.is-scroll .comm__inner {
+			gap: var(--space-sm);
+		}
+		.comm.is-scroll .comm__figure {
+			height: min(22svh, 10rem);
+		}
+	}
+	@media (min-width: 64rem) {
+		.comm.is-scroll .comm__panel {
+			grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+			grid-template-rows: minmax(0, 1fr);
+			gap: var(--space-xl);
+		}
+		.comm.is-scroll .comm__figure {
+			height: 100%;
+		}
+		.comm.is-scroll .comm__content {
+			align-self: center;
+			max-height: 100%;
+		}
+	}
+</style>
+
+<script>
+	// Abas acessíveis (clique, setas, Home, End) + troca por rolagem.
+	const root = document.querySelector<HTMLElement>('[data-comm]');
+	if (root) {
+		const tabs = Array.from(root.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
+		const panels = Array.from(root.querySelectorAll<HTMLElement>('[role="tabpanel"]'));
+		const stage = root.querySelector<HTMLElement>('.comm__inner')!;
+		const n = tabs.length;
+		const last = n - 1;
+		let current = 0;
+		let scrollMode = false;
+
+		const select = (i: number, focus = false) => {
+			current = i;
+			tabs.forEach((t, k) => {
+				t.setAttribute('aria-selected', String(k === i));
+				t.tabIndex = k === i ? 0 : -1;
+			});
+			panels.forEach((p, k) => (p.dataset.active = String(k === i)));
+			if (focus) tabs[i].focus();
+		};
+
+		// Posição (px) da faixa de rolagem da seção
+		const metrics = () => {
+			const hdr = parseFloat(getComputedStyle(stage).top) || 0;
+			const top = root.getBoundingClientRect().top + window.scrollY - hdr;
+			const range = root.offsetHeight - stage.offsetHeight;
+			return { top, range };
+		};
+		const goTo = (i: number, focus = false) => {
+			if (!scrollMode) return select(i, focus);
+			const { top, range } = metrics();
+			window.scrollTo({ top: top + ((i + 0.5) / n) * range, behavior: 'smooth' });
+			select(i, focus);
+		};
+
+		let ticking = false;
+		const update = () => {
+			ticking = false;
+			const { top, range } = metrics();
+			if (range <= 0) return;
+			const progress = Math.min(1, Math.max(0, (window.scrollY - top) / range));
+			const idx = Math.min(last, Math.floor(progress * n));
+			if (idx !== current) select(idx);
+		};
+		const onScroll = () => {
+			if (!ticking) {
+				ticking = true;
+				requestAnimationFrame(update);
+			}
+		};
+
+		const enable = () => {
+			scrollMode = true;
+			root.classList.add('is-scroll');
+			root.style.setProperty('--n', String(n));
+			// Carrega as fotos de todas as abas: a troca por rolagem não pode piscar
+			root.querySelectorAll<HTMLImageElement>('img[loading="lazy"]').forEach((img) => (img.loading = 'eager'));
+			window.addEventListener('scroll', onScroll, { passive: true });
+			window.addEventListener('resize', update);
+			update();
+		};
+		const disable = () => {
+			scrollMode = false;
+			root.classList.remove('is-scroll');
+			window.removeEventListener('scroll', onScroll);
+			window.removeEventListener('resize', update);
+		};
+		// Sem movimento reduzido e com altura mínima (celular deitado fica em abas normais)
+		const mq = window.matchMedia('(prefers-reduced-motion: no-preference) and (min-height: 28rem)');
+		const apply = () => (mq.matches ? !scrollMode && enable() : scrollMode && disable());
+		mq.addEventListener('change', apply);
+		apply();
+
+		tabs.forEach((t, i) => {
+			t.addEventListener('click', () => goTo(i));
+			t.addEventListener('keydown', (e) => {
+				if (e.key === 'ArrowRight') goTo(i === last ? 0 : i + 1, true);
+				else if (e.key === 'ArrowLeft') goTo(i === 0 ? last : i - 1, true);
+				else if (e.key === 'Home') goTo(0, true);
+				else if (e.key === 'End') goTo(last, true);
+				else return;
+				e.preventDefault();
+			});
+		});
+	}
+</script>

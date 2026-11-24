@@ -1,0 +1,78 @@
+/*
+ * Design tokens CorreON — ponto central (CORREON_DESIGN_SYSTEM_MASTER.md §10).
+ * Componentes consomem estes tokens; não redefinem a paleta localmente.
+ */
+:root {
+  /* Cores de marca, amostradas por pixel da folha oficial do logotipo
+     imagens/WhatsApp Image 2026-11-17 at 12.55.28.jpeg.
+     Se a marca tiver HEX documentados em manual, confirmar estes valores. */
+  --color-brand-primary: #01cd52; /* verde do "ON" do logotipo */
+  --color-brand-dark: #000000; /* fundo preto do logotipo */
+  --color-brand-light: #ffffff;
+
+  /* Aplicações semânticas */
+  --color-background-primary: var(--color-brand-dark);
+  --color-background-secondary: color-mix(in srgb, var(--color-brand-dark) 85%, white);
+  --color-text-primary: var(--color-brand-light);
+  --color-text-secondary: color-mix(in srgb, var(--color-brand-light) 72%, transparent);
+  --color-accent: var(--color-brand-primary);
+  --color-border-subtle: color-mix(in srgb, var(--color-brand-light) 14%, transparent);
+  --color-overlay: color-mix(in srgb, var(--color-brand-dark) 82%, transparent);
+  --color-on-accent: var(--color-brand-dark);
+
+  /* Tipografia — substituir pela família oficial CorreON quando disponível */
+  --font-display: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-heading: var(--font-display);
+  --font-body: var(--font-display);
+  --font-label: var(--font-display);
+  --font-button: var(--font-display);
+  --font-weight-label: 600;
+  --font-weight-button: 700;
+  --text-label: 0.8125rem;
+  --text-button: 0.875rem;
+  --text-body: 1rem;
+  --letter-spacing-label: 0.08em;
+
+  /* Espaçamento */
+  --space-2xs: 0.25rem;
+  --space-xs: 0.5rem;
+  --space-sm: 0.75rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2.5rem;
+
+  /* Layout (breakpoints documentados: tablet 48rem, desktop 64rem — usar nas @media) */
+  --layout-max-width: 80rem;
+  --layout-gutter: clamp(1rem, 4vw, 2.5rem);
+  --header-height: 4.5rem;
+
+  /* Raios e sombras */
+  --radius-sm: 0.375rem;
+  --radius-pill: 999px;
+  --shadow-header: 0 1px 0 var(--color-border-subtle);
+  --shadow-accent-glow: 0 0 2rem color-mix(in srgb, var(--color-accent) 35%, transparent);
+
+  /* Movimento */
+  /* Valores extraídos do design system de referência (--animation-default,
+     power2/power3 do components.js): curva e tempos, não identidade visual. */
+  --motion-duration-fast: 200ms;
+  --motion-duration-base: 750ms;
+  --motion-duration-reveal: 600ms;
+  --motion-duration-roll: 600ms;
+  --motion-ease: cubic-bezier(0.65, 0.05, 0, 1); /* default da referência */
+  --motion-ease-out: cubic-bezier(0.25, 0.46, 0.45, 0.94); /* power2.out */
+  --motion-ease-in-out: cubic-bezier(0.455, 0.03, 0.515, 0.955); /* power2.inOut */
+  --motion-ease-roll: cubic-bezier(0.215, 0.61, 0.355, 1); /* power3.out */
+  --motion-roll-stagger: 20ms;
+
+  /* Camadas */
+  --z-header: 100;
+  --z-menu: 110;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-duration-fast: 0.01ms;
+    --motion-duration-base: 0.01ms;
+  }
+}

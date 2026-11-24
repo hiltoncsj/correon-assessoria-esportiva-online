@@ -1,0 +1,123 @@
+---
+import { Image } from 'astro:assets';
+import imgA from '../assets/hero4-imagem1.jpeg';
+import imgB from '../assets/hero4-imagem2.jpeg';
+import imgC from '../assets/hero4-imagem3.jpeg';
+
+// Hero 04 — título fixo à esquerda; à direita, três imagens do mesmo tamanho,
+// uma abaixo da outra. Ao rolar, cada imagem sobe e se sobrepõe à anterior; só
+// depois das três sobrepostas o bloco sobe para o Hero 05 (CSS sticky, sem JS).
+const title = 'Do Planejamento ao Desempenho';
+const photos = [
+	{
+		src: imgA,
+		alt: 'Atleta CorreON de boné conferindo o relógio em uma pista ao entardecer, com gráficos de desempenho sobrepostos',
+	},
+	{
+		src: imgB,
+		alt: 'Atletas treinando em uma academia sob luz azul: nadador, ciclista, levantamento de peso, corredor em sprint e treino com corda',
+	},
+	{
+		src: imgC,
+		alt: 'Cinco corredores CorreON sorrindo, correndo juntos em uma orla ao pôr do sol',
+	},
+];
+---
+
+<section class="stack" aria-labelledby="stack-title">
+	<div class="stack__inner">
+		<div class="stack__lead">
+			<h2 id="stack-title" class="stack__title">{title}</h2>
+		</div>
+
+		<ul class="stack__photos">
+			{photos.map((p, i) => (
+				<li class="stack__photo">
+					<Image
+						src={p.src}
+						alt={p.alt}
+						widths={[480, 720, 960]}
+						sizes="(min-width: 64rem) 55vw, 100vw"
+						loading={i === 0 ? 'eager' : 'lazy'}
+						decoding="async"
+					/>
+				</li>
+			))}
+		</ul>
+	</div>
+</section>
+
+<style>
+	.stack {
+		--stack-top: calc(var(--header-height) + var(--space-lg));
+		--stack-h: min(70svh, 34rem);
+		--stack-gap: clamp(2rem, 14svh, 6rem);
+		background: var(--color-background-primary);
+		color: var(--color-text-primary);
+		padding-block: clamp(2rem, 6vw, 4rem);
+	}
+	.stack__inner {
+		max-width: var(--layout-max-width);
+		margin: 0 auto;
+		padding: 0 var(--layout-gutter);
+		display: grid;
+		gap: var(--space-lg);
+		align-items: start;
+	}
+
+	.stack__title {
+		margin: 0;
+		font: 800 clamp(1.75rem, 4vw, 3rem) / 1.05 var(--font-heading);
+		letter-spacing: -0.02em;
+		text-transform: uppercase;
+		text-wrap: balance;
+	}
+
+	/* Imagens: mesmo tamanho, espaçadas na vertical; cada uma "gruda" no mesmo
+	   ponto e a seguinte desliza por cima dela. */
+	.stack__photos {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: var(--stack-gap);
+	}
+	.stack__photo {
+		position: sticky;
+		top: var(--stack-top);
+		height: var(--stack-h);
+		overflow: clip;
+		border-radius: var(--radius-sm);
+		background: var(--color-background-secondary);
+		box-shadow: 0 -1rem 2.5rem color-mix(in srgb, black 55%, transparent);
+	}
+	.stack__photo :global(img) {
+		display: block;
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		object-position: center top; /* fotos verticais: preserva o rosto */
+	}
+
+	@media (min-width: 64rem) {
+		.stack__inner {
+			grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+			column-gap: calc(var(--space-xl) * 2);
+		}
+		/* Texto fixo à esquerda, centrado na altura da imagem enquanto elas se empilham */
+		.stack__lead {
+			position: sticky;
+			top: var(--stack-top);
+			height: var(--stack-h);
+			display: flex;
+			align-items: center;
+		}
+	}
+	@media (max-height: 30rem) and (orientation: landscape) {
+		.stack {
+			--stack-h: 70svh;
+			--stack-gap: 2rem;
+		}
+	}
+</style>

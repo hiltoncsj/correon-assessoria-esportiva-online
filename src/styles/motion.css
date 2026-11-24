@@ -1,0 +1,143 @@
+/*
+ * Movimento compartilhado — padrões do design system de referência, aplicados
+ * com a identidade CorreON (CORREON_DESIGN_SYSTEM_MASTER.md §6):
+ *  1. Text roll nos links/botões (caracteres sobem em cascata no hover/foco).
+ *  2. Line highlight reveal nos títulos de seção (recorte + varredura em verde).
+ *  3. Transição entre seções (linha que se desenha na entrada).
+ * Tudo some com prefers-reduced-motion e o conteúdo funciona sem JS.
+ */
+
+html {
+  scroll-padding-top: var(--header-height);
+}
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+/* ---------- 1. Text roll ---------- */
+.roll {
+  display: inline-flex;
+  overflow: hidden;
+  height: 1.2em;
+  line-height: 1.2;
+  vertical-align: bottom;
+}
+.roll__sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.roll__char {
+  position: relative;
+  display: inline-block;
+  white-space: pre;
+  transition: transform var(--motion-duration-roll) var(--motion-ease-roll);
+  transition-delay: calc(var(--i) * var(--motion-roll-stagger));
+}
+.roll__char::after {
+  content: attr(data-c);
+  position: absolute;
+  left: 0;
+  top: 100%;
+}
+[data-roll]:is(:hover, :focus-visible) .roll__char {
+  transform: translateY(-100%);
+}
+@media (prefers-reduced-motion: reduce) {
+  .roll__char {
+    transition: none;
+  }
+  [data-roll]:is(:hover, :focus-visible) .roll__char {
+    transform: none;
+  }
+}
+
+/* ---------- 2. Line highlight reveal nos títulos ---------- */
+@media (prefers-reduced-motion: no-preference) {
+  html.js main h2 {
+    position: relative;
+    /* a faixa de revelação acompanha a largura do texto, não da coluna */
+    width: fit-content;
+    max-width: 100%;
+    clip-path: inset(0 100% 0 0);
+  }
+  html.js main h2::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--color-accent);
+    transform-origin: right center;
+    pointer-events: none;
+  }
+  html.js main h2.is-in {
+    clip-path: inset(0 0 0 0);
+    transition: clip-path var(--motion-duration-reveal) var(--motion-ease-out);
+  }
+  html.js main h2.is-in::after {
+    transform: scaleX(0);
+    transition: transform var(--motion-duration-reveal) var(--motion-ease-in-out)
+      calc(var(--motion-duration-reveal) / 2);
+  }
+}
+
+/* ---------- 3. Transição entre seções: "cortina" que se abre ----------
+   Cada seção entra como um painel de cantos arredondados, recuado nas laterais,
+   que se expande até a largura total enquanto o conteúdo sobe um pouco mais
+   devagar que a rolagem (parallax). Conduzida pela rolagem, sem JS. Sem linhas. */
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    main > section:not(:first-child),
+    body > footer {
+      animation: section-open linear both;
+      animation-timeline: view();
+      animation-range: entry 0px entry 520px;
+    }
+    main > section:not(:first-child) > [class*='__inner'] {
+      animation: section-content linear both;
+      animation-timeline: view();
+      animation-range: entry 0px entry 520px;
+    }
+  }
+}
+@keyframes section-open {
+  from {
+    clip-path: inset(4rem clamp(0.75rem, 5vw, 4rem) 0 clamp(0.75rem, 5vw, 4rem) round 2.5rem 2.5rem 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0 round 0 0 0 0);
+  }
+}
+@keyframes section-content {
+  from { transform: translateY(3.5rem); opacity: 0.2; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+/* ---------- Base de acessibilidade ---------- */
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 3px;
+}
+[data-roll] {
+  position: relative;
+}
+.skip-link {
+  position: absolute;
+  left: var(--layout-gutter);
+  top: 0;
+  z-index: calc(var(--z-menu) + 1);
+  padding: var(--space-sm) var(--space-md);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  font: var(--font-weight-button) var(--text-button) / 1 var(--font-button);
+  text-decoration: none;
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+  transform: translateY(-120%);
+}
+.skip-link:focus {
+  transform: translateY(0);
+}

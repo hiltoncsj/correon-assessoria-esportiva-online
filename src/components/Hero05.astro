@@ -1,0 +1,215 @@
+---
+import { Image } from 'astro:assets';
+import imgA from '../assets/hero5-imagem1.jpeg';
+import imgB from '../assets/hero5-imagem2.jpeg';
+
+// Hero 05 — máscara e revelação + empilhamento (CORREON_DESIGN_SYSTEM_MASTER.md §8).
+// A 1ª imagem começa recortada em formato de pílula (eco do "O" do logotipo) e
+// se abre ao rolar. Depois ela "gruda" e a 2ª imagem sobe por baixo, ficando por
+// cima (mesmo efeito do Hero 04, CSS sticky, sem JS).
+// TODO: textos aprovados no briefing.
+const eyebrow = 'SEÇÃO 5';
+// Cada imagem tem seu treinador; o texto troca quando a 2ª imagem cobre a 1ª.
+const people = [
+	{
+		title: 'TREINADOR HILTON COUTINHO JR',
+		text: 'Treinador de Corrida e Triathlon. Personal Trainer',
+	},
+	{
+		title: 'TREINADOR ANDERSON SANTOS',
+		text: 'Treinador de Musculação. Personal Trainer',
+	},
+];
+const photos = [
+	{
+		src: imgA,
+		alt: 'Atleta CorreON de boné virado, sorrindo e correndo diante de um anel de luz verde',
+	},
+	{
+		src: imgB,
+		alt: 'Atleta CorreON em corrida, com expressão concentrada, diante de um anel de luz verde',
+	},
+];
+---
+
+<section class="reveal" id="sobre" aria-labelledby="reveal-title">
+	<div class="reveal__inner">
+		<div class="reveal__copy">
+			<p class="reveal__eyebrow">{eyebrow}</p>
+			<div class="reveal__people">
+				{people.map((p, i) => (
+					<div class="reveal__person">
+						<h2 id={i === 0 ? 'reveal-title' : undefined} class="reveal__title">{p.title}</h2>
+						<p class="reveal__text">{p.text}</p>
+					</div>
+				))}
+			</div>
+		</div>
+
+		<ul class="reveal__photos">
+			{photos.map((p, i) => (
+				<li class="reveal__photo">
+					<Image
+						src={p.src}
+						alt={p.alt}
+						widths={[480, 800, 1080]}
+						sizes="(min-width: 64rem) 55vw, 100vw"
+						loading="lazy"
+						decoding="async"
+					/>
+				</li>
+			))}
+		</ul>
+	</div>
+</section>
+
+<style>
+	.reveal {
+		--stack-top: calc(var(--header-height) + var(--space-lg));
+		--stack-gap: clamp(2rem, 14svh, 6rem);
+		background: var(--color-background-secondary);
+		color: var(--color-text-primary);
+		padding-block: clamp(3rem, 10vw, 7rem);
+		overflow: clip;
+		scroll-margin-top: calc(var(--header-height) - 140px);
+	}
+	.reveal__inner {
+		max-width: var(--layout-max-width);
+		margin: 0 auto;
+		padding: 0 var(--layout-gutter);
+		display: grid;
+		gap: var(--space-xl);
+		align-items: start;
+	}
+	.reveal__eyebrow {
+		margin: 0 0 var(--space-sm);
+		font: var(--font-weight-label) var(--text-label) / 1.2 var(--font-label);
+		letter-spacing: var(--letter-spacing-label);
+		text-transform: uppercase;
+		color: var(--color-accent);
+	}
+	.reveal__title {
+		margin: 0 0 var(--space-md);
+		font: 800 clamp(1.75rem, 4vw, 3rem) / 1.05 var(--font-heading);
+		letter-spacing: -0.02em;
+		text-transform: uppercase;
+		text-wrap: balance;
+	}
+	.reveal__text {
+		margin: 0;
+		max-width: 30rem;
+		font: 400 var(--text-body) / 1.6 var(--font-body);
+		color: var(--color-text-secondary);
+	}
+
+	/* Imagens: mesmo tamanho; cada uma "gruda" no mesmo ponto e a seguinte sobe
+	   por cima dela. Sem JS ou com movimento reduzido, ficam simplesmente empilhadas. */
+	.reveal__photos {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: var(--stack-gap);
+	}
+	.reveal__photo {
+		position: sticky;
+		top: var(--stack-top);
+		aspect-ratio: 2 / 1;
+		overflow: clip;
+		border-radius: var(--radius-sm);
+		border: 1px solid var(--color-border-subtle);
+		background: var(--color-background-primary);
+		box-shadow: 0 -1rem 2.5rem color-mix(in srgb, black 55%, transparent);
+	}
+	.reveal__photo :global(img) {
+		display: block;
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+	}
+
+	/* Revelação por máscara apenas na 1ª imagem, concluída antes de ela grudar */
+	@media (prefers-reduced-motion: no-preference) {
+		@supports (animation-timeline: view()) {
+			.reveal__photo:first-child {
+				animation: reveal-mask linear both;
+				animation-timeline: view();
+				animation-range: entry 10% cover 40%;
+			}
+			.reveal__photo:first-child :global(img) {
+				animation: reveal-scale linear both;
+				animation-timeline: view();
+				animation-range: entry 10% cover 40%;
+			}
+		}
+	}
+	@keyframes reveal-mask {
+		from { clip-path: inset(18% 22% round 999px); }
+		to { clip-path: inset(0 0 round var(--radius-sm)); }
+	}
+	@keyframes reveal-scale {
+		from { transform: scale(1.25); }
+		to { transform: scale(1); }
+	}
+
+	/* Sem troca animada (celular, sem suporte ou movimento reduzido), os dois
+	   treinadores ficam listados um abaixo do outro: nenhum texto se perde. */
+	.reveal__people {
+		display: grid;
+		gap: var(--space-lg);
+	}
+	.reveal__person .reveal__title {
+		margin-bottom: var(--space-sm);
+	}
+
+	@media (min-width: 64rem) {
+		.reveal__inner {
+			grid-template-columns: minmax(0, 4fr) minmax(0, 7fr);
+			gap: calc(var(--space-xl) * 2);
+		}
+		/* Texto fixo à esquerda enquanto as imagens se empilham */
+		.reveal__copy {
+			position: sticky;
+			top: var(--stack-top);
+		}
+	}
+
+	/* Troca do texto: acompanha a 2ª imagem subindo sobre a 1ª (timeline da própria
+	   2ª imagem). Os dois blocos se sobrepõem e um dissolve no outro. */
+	@media (min-width: 64rem) and (prefers-reduced-motion: no-preference) {
+		@supports (animation-timeline: view()) {
+			.reveal__inner {
+				timeline-scope: --second-photo;
+			}
+			.reveal__photo:nth-child(2) {
+				view-timeline: --second-photo block;
+			}
+			.reveal__people {
+				gap: 0;
+			}
+			.reveal__person {
+				grid-area: 1 / 1;
+				animation-timing-function: linear;
+				animation-fill-mode: both;
+				animation-timeline: --second-photo;
+				/* 50% do "cover" = centro da imagem no centro vertical da tela */
+				animation-range: cover 47% cover 53%;
+			}
+			.reveal__person:nth-child(1) { animation-name: person-out; }
+			.reveal__person:nth-child(2) { animation-name: person-in; }
+		}
+	}
+	@keyframes person-out {
+		to { opacity: 0; visibility: hidden; transform: translateY(-1rem); }
+	}
+	@keyframes person-in {
+		from { opacity: 0; visibility: hidden; transform: translateY(1rem); }
+	}
+
+	@media (max-height: 30rem) and (orientation: landscape) {
+		.reveal {
+			--stack-gap: 2rem;
+		}
+	}
+</style>

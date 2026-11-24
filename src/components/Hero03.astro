@@ -1,0 +1,213 @@
+---
+import { Image } from 'astro:assets';
+import imgA from '../assets/hero3-imagem1.jpeg';
+import imgB from '../assets/hero3-imagem2.jpeg';
+import imgC from '../assets/hero3-imagem3.jpeg';
+
+// Hero 03 — três níveis de corredores, imagens lado a lado, sem margem e sem
+// padding, todas do mesmo tamanho (CORREON_DESIGN_SYSTEM_MASTER.md §8).
+const levels = [
+	{
+		title: 'Corredores Iniciantes',
+		image: imgA,
+		alt: 'Corredora sorrindo com uniforme e boné CorreON, correndo em um parque arborizado',
+	},
+	{
+		title: 'Corredores Intermediários',
+		image: imgB,
+		alt: 'Corredor de cabelos grisalhos com camiseta CorreON correndo em uma pista de atletismo',
+	},
+	{
+		title: 'Corredores Avançados',
+		image: imgC,
+		alt: 'Atleta com regata CorreON em plena corrida de velocidade na pista',
+	},
+];
+---
+
+<section class="levels" aria-label="Níveis de corredores">
+	<div class="levels__pin">
+	<ul class="levels__grid">
+		{levels.map((l) => (
+			<li class="level">
+				<Image
+					class="level__img"
+					src={l.image}
+					alt={l.alt}
+					widths={[480, 720, 960]}
+					sizes="(min-width: 48rem) 34vw, 100vw"
+					loading="lazy"
+					decoding="async"
+				/>
+				<h3 class="level__title">
+					{l.title.split(' ').map((word) => <span class="level__word">{word}</span>)}
+				</h3>
+			</li>
+		))}
+	</ul>
+	</div>
+</section>
+
+<style>
+	.levels {
+		background: var(--color-background-primary);
+		color: var(--color-text-primary);
+		margin: 0;
+		padding: 0;
+	}
+	.levels__grid {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: grid;
+		grid-template-columns: 1fr;
+		gap: 0;
+	}
+	.level {
+		position: relative;
+		margin: 0;
+		padding: 0;
+		aspect-ratio: 3 / 4;
+		overflow: clip;
+		isolation: isolate;
+	}
+	.level :global(.level__img) {
+		position: absolute;
+		inset: 0;
+		z-index: -2;
+		display: block;
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		transition: transform var(--motion-duration-base) var(--motion-ease);
+	}
+	/* Véu na parte inferior para garantir contraste do título sobre a foto */
+	.level::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		z-index: -1;
+		background: linear-gradient(to top, var(--color-overlay) 0%, transparent 55%);
+	}
+	.level:hover :global(.level__img) {
+		transform: scale(1.04);
+	}
+	/* Título centralizado na horizontal, na parte inferior, uma palavra abaixo da outra */
+	.level__title {
+		position: absolute;
+		inset: 0;
+		margin: 0;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: flex-end;
+		padding: var(--space-xl) var(--space-md);
+		text-align: center;
+		font: 800 clamp(1.5rem, 3vw, 2.5rem) / 1.05 var(--font-heading);
+		letter-spacing: -0.01em;
+		text-transform: uppercase;
+		color: var(--color-brand-light);
+	}
+	.level__word {
+		display: block;
+	}
+
+	@media (min-width: 48rem) {
+		.levels__grid {
+			grid-template-columns: repeat(3, 1fr);
+		}
+	}
+
+	/* Sequência conduzida pela rolagem (desktop/tablet, lado a lado):
+	   1) as 3 imagens, lado a lado, crescem como um único bloco até 100vw;
+	   2) a seção fica fixa na tela e, rolando, surge "CORREDORES INICIANTES";
+	   3) continuando, "CORREDORES INTERMEDIÁRIOS";
+	   4) por fim, "CORREDORES AVANÇADOS". Cada texto se abre de dentro para fora.
+	   Sem suporte ou com movimento reduzido: tudo estático, sem altura extra. */
+	@media (prefers-reduced-motion: no-preference) {
+		@supports (animation-timeline: view()) {
+			/* Celular (fotos empilhadas): cada título abre quando sua foto entra */
+			.level {
+				view-timeline: --level block;
+			}
+			.level__word {
+				animation: word-open linear both;
+				animation-timeline: --level;
+				animation-range: entry 60% entry 90%;
+			}
+			.level__word:nth-child(2) {
+				animation-range: entry 68% entry 98%;
+			}
+
+			@media (min-width: 48rem) {
+				.levels {
+					height: 280svh;
+					view-timeline: --levels block;
+				}
+				.levels__pin {
+					position: sticky;
+					top: var(--header-height);
+					height: calc(100svh - var(--header-height));
+					display: flex;
+					align-items: center;
+					justify-content: center;
+				}
+				/* As 3 imagens lado a lado formam UM bloco que cresce até 100vw */
+				.levels__grid {
+					flex: none;
+					width: 100%;
+					height: 100%;
+					overflow: clip;
+					animation: block-grow linear both;
+					animation-timeline: --levels;
+					animation-range: entry 0% entry 90%;
+				}
+				.level {
+					aspect-ratio: auto;
+					height: 100%;
+					view-timeline: none;
+				}
+				.level__word {
+					animation-timeline: --levels;
+				}
+				.level:nth-child(1) .level__word { animation-range: contain 10% contain 28%; }
+				.level:nth-child(1) .level__word:nth-child(2) { animation-range: contain 16% contain 34%; }
+				.level:nth-child(2) .level__word { animation-range: contain 40% contain 58%; }
+				.level:nth-child(2) .level__word:nth-child(2) { animation-range: contain 46% contain 64%; }
+				.level:nth-child(3) .level__word { animation-range: contain 70% contain 88%; }
+				.level:nth-child(3) .level__word:nth-child(2) { animation-range: contain 76% contain 94%; }
+			}
+		}
+	}
+	@keyframes word-open {
+		from {
+			clip-path: inset(0 50% 0 50%);
+			opacity: 0;
+		}
+		to {
+			clip-path: inset(0 0 0 0);
+			opacity: 1;
+		}
+	}
+	@keyframes block-grow {
+		from {
+			width: 56%;
+			height: 68%;
+			border-radius: 1.5rem;
+		}
+		to {
+			width: 100%;
+			height: 100%;
+			border-radius: 0;
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.level :global(.level__img) {
+			transition: none;
+		}
+		.level:hover :global(.level__img) {
+			transform: none;
+		}
+	}
+</style>

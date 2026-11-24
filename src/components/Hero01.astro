@@ -1,0 +1,234 @@
+---
+import { Image } from 'astro:assets';
+import heroImage from '../assets/hero1.png';
+
+// Título: marca + slogan oficial. Subtexto aprovado pelo cliente.
+const title = ['Conecte-se, Corra,', 'Evolua!'];
+const subtitle =
+	'Pronto para melhorar seu desempenho. Siga um plano detalhado, elaborado para ajudar você a correr mais rápido e desenvolver resistência a longo prazo.';
+const cta = { label: 'COMECE SUA EVOLUÇÃO', href: '#contato' };
+const modalities = ['CORRIDA', 'TRIATHLON', 'MUSCULAÇÃO'];
+---
+
+<section class="hero" aria-labelledby="hero-title">
+	<div class="hero__media">
+		<Image
+			src={heroImage}
+			alt="Grupo de corredores CorreON sorrindo durante uma corrida ao pôr do sol, à beira-mar"
+			widths={[640, 960, 1280, 1670]}
+			sizes="100vw"
+			loading="eager"
+			fetchpriority="high"
+		/>
+	</div>
+
+	<div class="hero__inner">
+		<h1 id="hero-title" class="hero__title">
+			{title.map((line, i) => (
+				<span class:list={['hero__line', { 'hero__line--accent': i === title.length - 1 }]}>{line}</span>
+			))}
+		</h1>
+		<p class="hero__subtitle">{subtitle}</p>
+		<div class="hero__action">
+			<a class="hero__cta" href={cta.href}>{cta.label}</a>
+			<p class="hero__modalities">
+				{modalities.map((m) => <span class="hero__modality">{m}</span>)}
+			</p>
+		</div>
+	</div>
+</section>
+
+<style>
+	.hero {
+		position: relative;
+		isolation: isolate;
+		display: flex;
+		align-items: flex-end;
+		min-height: calc(100svh - var(--header-height));
+		overflow: clip;
+		background: var(--color-background-primary);
+	}
+	.hero__media {
+		position: absolute;
+		inset: 0;
+		z-index: -2;
+		overflow: hidden;
+		transform-origin: 50% 40%;
+	}
+	.hero__media :global(img) {
+		width: 100%;
+		/* foto 60px mais alta no quadro: sobe 60px e estende a altura para cobrir o fundo */
+		height: calc(100% + 60px);
+		margin-top: -60px;
+		object-fit: cover;
+		object-position: 55% top; /* topo da foto alinhado logo abaixo do header */
+	}
+	/* Véu de legibilidade: garante contraste do texto sobre a foto */
+	.hero::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		z-index: -1;
+		background:
+			linear-gradient(to top, var(--color-background-primary) 0%, var(--color-overlay) 35%, transparent 75%),
+			linear-gradient(to right, var(--color-overlay) 0%, transparent 60%);
+	}
+
+	.hero__inner {
+		width: 100%;
+		max-width: var(--layout-max-width);
+		margin: 0 auto;
+		padding: var(--space-xl) var(--layout-gutter);
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: var(--space-lg);
+	}
+	.hero__title {
+		margin: 0;
+		display: flex;
+		flex-direction: column;
+		font: 800 clamp(1.5rem, 3.6vw, 2.75rem) / 0.95 var(--font-display);
+		letter-spacing: -0.02em;
+		text-transform: uppercase;
+		color: var(--color-text-primary);
+		text-wrap: balance;
+	}
+	.hero__line {
+		white-space: nowrap;
+	}
+	.hero__line--accent {
+		color: var(--color-accent);
+	}
+	.hero__subtitle {
+		margin: 0;
+		max-width: 34rem;
+		font: 400 var(--text-body) / 1.5 var(--font-body);
+		color: var(--color-text-secondary);
+	}
+	.hero__cta {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-height: 3rem;
+		padding: 0 var(--space-xl);
+		border-radius: var(--radius-pill);
+		background: var(--color-accent);
+		color: var(--color-on-accent);
+		font: var(--font-weight-button) var(--text-button) / 1 var(--font-button);
+		letter-spacing: var(--letter-spacing-label);
+		text-transform: uppercase;
+		text-decoration: none;
+		transition: background-color var(--motion-duration-fast) var(--motion-ease);
+	}
+	/* Botão + modalidades: o texto fica centralizado em relação ao botão */
+	.hero__action {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: var(--space-sm);
+	}
+	.hero__modalities {
+		margin: 0;
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: center;
+		align-items: center;
+		column-gap: 0.75em;
+		font: var(--font-weight-label) calc(var(--text-label) * 0.8) / 1.2 var(--font-label);
+		letter-spacing: var(--letter-spacing-label);
+		text-transform: uppercase;
+		color: var(--color-text-primary);
+		opacity: 0.7;
+	}
+	/* Separador: círculo pequeno entre os nomes (decorativo) */
+	.hero__modality + .hero__modality::before {
+		content: '';
+		display: inline-block;
+		width: 0.35em;
+		height: 0.35em;
+		margin-right: 0.75em;
+		border-radius: 50%;
+		background: currentColor;
+		vertical-align: middle;
+	}
+	.hero__cta:hover {
+		background: var(--color-text-primary);
+	}
+	.hero__cta:focus-visible {
+		outline: 2px solid var(--color-text-primary);
+		outline-offset: 3px;
+	}
+
+	/* Revelação progressiva do título: só CSS, conteúdo visível sem JS/animação */
+	@media (prefers-reduced-motion: no-preference) {
+		.hero__line,
+		.hero__subtitle,
+		.hero__cta,
+		.hero__modalities {
+			animation: hero-rise var(--motion-duration-base) var(--motion-ease) both;
+		}
+		.hero__line:nth-child(1) { animation-delay: 0ms; }
+		.hero__line:nth-child(2) { animation-delay: 90ms; }
+		.hero__line:nth-child(3) { animation-delay: 180ms; }
+		.hero__subtitle { animation-delay: 360ms; }
+		.hero__cta { animation-delay: 440ms; }
+		.hero__modalities { animation-delay: 520ms; }
+		/* Aproximação: a foto "avança" lentamente em direção ao espectador */
+		.hero__media :global(img) {
+			animation: hero-push 14s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+			transform-origin: 55% top; /* aproxima sem empurrar o topo para baixo do header */
+		}
+	}
+	/* Saída para o Hero 02: efeito inverso ao da abertura do Hero 03 — a foto
+	   encolhe e ganha cantos arredondados enquanto o texto se dissolve. */
+	@media (prefers-reduced-motion: no-preference) {
+		@supports (animation-timeline: view()) {
+			.hero__media {
+				animation: hero-exit-media linear both;
+				animation-timeline: view();
+				animation-range: exit 0% exit 100%;
+			}
+			.hero__inner {
+				animation: hero-exit-copy linear both;
+				animation-timeline: view();
+				animation-range: exit 0% exit 70%;
+			}
+		}
+	}
+	@keyframes hero-exit-media {
+		to { transform: scale(0.78); border-radius: 2.5rem; opacity: 0.55; }
+	}
+	@keyframes hero-exit-copy {
+		to { transform: translateY(-3rem); opacity: 0; }
+	}
+	@keyframes hero-rise {
+		from { opacity: 0; transform: translateY(1.25rem); }
+	}
+	@keyframes hero-push {
+		from { transform: scale(1); }
+		to { transform: scale(1.18); }
+	}
+
+	@media (min-width: 64rem) {
+		.hero__inner {
+			padding-bottom: calc(var(--space-xl) * 1.5);
+		}
+	}
+	/* Celular em paisagem: altura curta, evitar título gigante */
+	@media (max-height: 30rem) and (orientation: landscape) {
+		.hero {
+			min-height: calc(100svh - var(--header-height));
+		}
+		.hero__inner {
+			gap: var(--space-sm);
+			padding-block: var(--space-md);
+		}
+		.hero__title {
+			font-size: clamp(1.25rem, 5vh, 1.75rem);
+			flex-direction: row;
+			flex-wrap: wrap;
+			column-gap: 0.3em;
+		}
+	}
+</style>

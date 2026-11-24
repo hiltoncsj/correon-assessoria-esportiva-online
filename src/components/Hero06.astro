@@ -1,0 +1,783 @@
+---
+import { Image } from 'astro:assets';
+import imgCorrida from '../assets/PlanoCorrida.png';
+import imgTriathlon from '../assets/PlanoTriathlon.png';
+import imgMusculacao from '../assets/PlanoMusculacao.png';
+import { modalities, periods, prices, bundles, exclusiveGroups, benefits, personalFormats } from '../data/plans';
+
+// Hero 06 — escolha de modalidade e periodicidade, com resumo da contratação.
+// Preços e regras comerciais vivem em src/data/plans.ts. Sem JS, os controles
+// nativos continuam funcionando e o botão leva a #contato.
+const eyebrow = 'SEÇÃO 6';
+const title = 'O próximo capítulo da sua evolução começa com uma escolha.';
+const text =
+	'Treinamento inteligente, acompanhamento profissional e tecnologia para transformar seus objetivos em resultados. Escolha sua modalidade e encontre o plano ideal para sua evolução.';
+
+const images = {
+	corrida: {
+		src: imgCorrida,
+		alt: 'Corredora de óculos e regata CorreON correndo sorridente em uma orla com palmeiras',
+	},
+	triathlon: {
+		src: imgTriathlon,
+		alt: 'Triatleta com uniforme CorreON e número 347 correndo, com nadador e ciclista ao fundo',
+	},
+	musculacao: {
+		src: imgMusculacao,
+		alt: 'Homem de regata CorreON fazendo rosca com halter em uma academia',
+	},
+};
+
+const brl = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+---
+
+<section
+	class="plans"
+	id="planos"
+	aria-labelledby="plans-title"
+	data-plans
+	data-prices={JSON.stringify(prices)}
+	data-periods={JSON.stringify(periods)}
+	data-bundles={JSON.stringify(bundles)}
+	data-exclusive={JSON.stringify(exclusiveGroups)}
+>
+	<div class="plans__inner">
+		<header class="plans__head">
+			<p class="plans__eyebrow">{eyebrow}</p>
+			<h2 id="plans-title" class="plans__title">{title}</h2>
+			<p class="plans__text">{text}</p>
+		</header>
+
+		<!-- Área 1 — Assessoria esportiva online -->
+		<div class="area">
+			<h3 class="area__title">Assessoria esportiva online</h3>
+
+			<ul class="mods">
+				{modalities.map((m) => (
+					<li class="mod" data-mod={m.id} data-name={m.name}>
+						<input
+							class="mod__check"
+							type="checkbox"
+							id={`mod-${m.id}`}
+							name="modalidade"
+							value={m.id}
+						/>
+						<label class="mod__pick" for={`mod-${m.id}`}>
+							<Image
+								class="mod__img"
+								src={images[m.id].src}
+								alt={images[m.id].alt}
+								widths={[480, 720, 960]}
+								sizes="(min-width: 64rem) 30vw, (min-width: 48rem) 45vw, 100vw"
+								loading="lazy"
+								decoding="async"
+							/>
+							<span class="mod__body">
+								<span class="mod__name">{m.name}</span>
+								<span class="mod__desc">{m.description}</span>
+								<span class="mod__state">
+									<span class="mod__state-off">Selecionar</span>
+									<span class="mod__state-on">✓ Selecionada</span>
+								</span>
+							</span>
+						</label>
+
+						<fieldset class="mod__period">
+							<legend class="mod__legend">Periodicidade · {m.name}</legend>
+							<div class="mod__options">
+								{periods.map((p) => {
+									const price = prices[m.id][p.id];
+									return (
+										<label class="opt">
+											<input
+												class="opt__input"
+												type="radio"
+												name={`periodo-${m.id}`}
+												value={p.id}
+												checked={p.id === 'mensal'}
+												disabled={price === null}
+											/>
+											<span class="opt__label">{p.label}</span>
+											<span class="opt__price">{price === null ? 'Em breve' : brl.format(price)}</span>
+										</label>
+									);
+								})}
+							</div>
+						</fieldset>
+					</li>
+				))}
+			</ul>
+
+			<!-- Resumo da contratação -->
+			<section class="summary" aria-labelledby="summary-title" aria-live="polite">
+				<h4 id="summary-title" class="summary__title">Resumo da contratação</h4>
+
+				<div class="summary__grid">
+					<div class="summary__lines">
+						<p class="summary__empty" data-empty>Selecione ao menos uma modalidade para ver os valores.</p>
+						<ul class="summary__list" data-lines hidden></ul>
+						<p class="summary__warn" data-warn hidden>
+							Há uma modalidade com período sem valor definido. Escolha outro período.
+						</p>
+					</div>
+
+					<div class="summary__side">
+						<p class="summary__total">
+							<span class="summary__total-label">Total</span>
+							<span class="summary__total-value" data-total>{brl.format(0)}</span>
+						</p>
+						<p class="summary__saving" data-saving hidden>
+							<span class="summary__total-label">Desconto do plano combinado</span>
+							<span class="summary__saving-value" data-saving-value></span>
+						</p>
+						<a class="plan__cta" href="#contato" data-cta>CONTRATAR</a>
+					</div>
+				</div>
+
+				<div class="summary__benefits">
+					<p class="summary__benefits-title">Benefícios incluídos</p>
+					<ul class="summary__benefits-list">
+						{benefits.map((b) => (
+							<li><span class="plan__check" aria-hidden="true">✓</span>{b}</li>
+						))}
+					</ul>
+				</div>
+			</section>
+		</div>
+
+		<!-- Área 2 — Personal Trainer (serviço independente) -->
+		<article class="pt" aria-labelledby="pt-title">
+			<div class="pt__head">
+				<h3 id="pt-title" class="pt__title">Personal Trainer</h3>
+				<p class="pt__text">
+					Atendimento presencial individualizado, com acompanhamento profissional e treinamento direcionado aos seus objetivos.
+				</p>
+			</div>
+
+			<fieldset class="pt__formats">
+				<legend class="pt__legend">Formato de contratação</legend>
+				{personalFormats.map((f, i) => (
+					<label class="opt opt--wide">
+						<input class="opt__input" type="radio" name="pt-formato" value={f.id} checked={i === 0} />
+						<span class="opt__label">{f.label}</span>
+						<span class="opt__price">Em breve</span>
+					</label>
+				))}
+			</fieldset>
+
+			<a class="plan__cta" href="#contato">COMEÇAR</a>
+		</article>
+	</div>
+</section>
+
+<style>
+	.plans {
+		background: var(--color-background-primary);
+		color: var(--color-text-primary);
+		padding-block: clamp(3rem, 10vw, 7rem);
+		scroll-margin-top: calc(var(--header-height) - 150px);
+	}
+	.plans__inner {
+		max-width: var(--layout-max-width);
+		margin: 0 auto;
+		padding: 0 var(--layout-gutter);
+		display: grid;
+		gap: var(--space-xl);
+	}
+	.plans__head {
+		max-width: 48rem;
+	}
+	.plans__eyebrow {
+		margin: 0 0 var(--space-sm);
+		font: var(--font-weight-label) var(--text-label) / 1.2 var(--font-label);
+		letter-spacing: var(--letter-spacing-label);
+		text-transform: uppercase;
+		color: var(--color-accent);
+	}
+	.plans__title {
+		margin: 0 0 var(--space-md);
+		font: 800 clamp(1.75rem, 4.5vw, 3.25rem) / 1.05 var(--font-heading);
+		letter-spacing: -0.02em;
+		text-transform: uppercase;
+		text-wrap: balance;
+	}
+	.plans__text {
+		margin: 0;
+		font: 400 var(--text-body) / 1.6 var(--font-body);
+		color: var(--color-text-secondary);
+	}
+
+	.area {
+		display: grid;
+		gap: var(--space-lg);
+	}
+	.area__title {
+		margin: 0;
+		padding-top: var(--space-md);
+		border-top: 1px solid var(--color-border-subtle);
+		font: var(--font-weight-label) var(--text-label) / 1.2 var(--font-label);
+		letter-spacing: var(--letter-spacing-label);
+		text-transform: uppercase;
+		color: var(--color-accent);
+	}
+
+	/* ---------- Cards de modalidade ---------- */
+	.mods {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: grid;
+		gap: var(--space-lg);
+	}
+	.mod {
+		position: relative;
+		display: grid;
+		grid-template-rows: 1fr auto;
+		background: var(--color-background-secondary);
+		border: 1px solid var(--color-border-subtle);
+		border-radius: var(--radius-sm);
+		overflow: hidden;
+		transition: border-color var(--motion-duration-fast) var(--motion-ease),
+			box-shadow var(--motion-duration-fast) var(--motion-ease);
+	}
+	/* Estado selecionado: borda + glow verde + texto "Selecionada" (não só cor) */
+	.mod:has(.mod__check:checked) {
+		border-color: var(--color-accent);
+		box-shadow: var(--shadow-accent-glow);
+	}
+	.mod:has(.mod__check:focus-visible) {
+		outline: 2px solid var(--color-text-primary);
+		outline-offset: 3px;
+	}
+	.mod__check {
+		position: absolute;
+		opacity: 0;
+		pointer-events: none;
+	}
+	.mod__pick {
+		position: relative;
+		display: grid;
+		align-items: end;
+		min-height: 22rem;
+		cursor: pointer;
+		isolation: isolate;
+	}
+	.mod__img {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		object-position: 50% 15%; /* mantém o rosto visível no recorte */
+		z-index: -2;
+		transition: transform var(--motion-duration-base) var(--motion-ease-out);
+	}
+	.mod__pick::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		z-index: -1;
+		background: linear-gradient(to top, var(--color-overlay) 20%, transparent 80%);
+	}
+	@media (prefers-reduced-motion: no-preference) {
+		.mod__pick:hover .mod__img {
+			transform: scale(1.04);
+		}
+	}
+	.mod__body {
+		display: grid;
+		gap: var(--space-sm);
+		padding: var(--space-lg);
+	}
+	.mod__name {
+		font: 800 clamp(1.75rem, 3.2vw, 2.5rem) / 1 var(--font-display);
+		letter-spacing: -0.02em;
+		text-transform: uppercase;
+	}
+	.mod__desc {
+		font: 400 var(--text-body) / 1.5 var(--font-body);
+		color: var(--color-text-secondary);
+		text-wrap: pretty;
+	}
+	.mod__state {
+		justify-self: start;
+		margin-top: var(--space-xs);
+		padding: var(--space-xs) var(--space-md);
+		border-radius: var(--radius-pill);
+		border: 1px solid var(--color-text-primary);
+		font: var(--font-weight-label) var(--text-label) / 1.2 var(--font-label);
+		letter-spacing: var(--letter-spacing-label);
+		text-transform: uppercase;
+	}
+	.mod__state-on {
+		display: none;
+	}
+	.mod:has(.mod__check:checked) .mod__state {
+		background: var(--color-accent);
+		border-color: var(--color-accent);
+		color: var(--color-on-accent);
+	}
+	.mod:has(.mod__check:checked) .mod__state-off {
+		display: none;
+	}
+	.mod:has(.mod__check:checked) .mod__state-on {
+		display: inline;
+	}
+
+	/* ---------- Periodicidade ---------- */
+	.mod__period {
+		margin: 0;
+		padding: var(--space-md) var(--space-lg) var(--space-lg);
+		border: 0;
+		min-width: 0;
+	}
+	/* Linha divisória no card (e não no fieldset, para a legenda não ficar sobre a borda) */
+	.mod__pick {
+		border-bottom: 1px solid var(--color-border-subtle);
+	}
+	.mod__period:disabled {
+		opacity: 0.45;
+	}
+	.mod__legend {
+		padding: 0;
+		margin-bottom: var(--space-sm);
+		font: var(--font-weight-label) var(--text-label) / 1.2 var(--font-label);
+		letter-spacing: var(--letter-spacing-label);
+		text-transform: uppercase;
+		color: var(--color-text-secondary);
+	}
+	.mod__options {
+		display: grid;
+		grid-template-columns: repeat(2, 1fr);
+		gap: var(--space-xs);
+	}
+	.opt {
+		position: relative;
+		display: grid;
+		gap: var(--space-2xs);
+		padding: var(--space-sm) var(--space-md);
+		border: 1px solid var(--color-border-subtle);
+		border-radius: var(--radius-sm);
+		cursor: pointer;
+		transition: border-color var(--motion-duration-fast) var(--motion-ease),
+			background-color var(--motion-duration-fast) var(--motion-ease);
+	}
+	.opt:has(.opt__input:disabled) {
+		cursor: not-allowed;
+		opacity: 0.55;
+	}
+	.opt:has(.opt__input:checked) {
+		border-color: var(--color-accent);
+		background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+	}
+	.opt:has(.opt__input:focus-visible) {
+		outline: 2px solid var(--color-text-primary);
+		outline-offset: 2px;
+	}
+	.opt__input {
+		position: absolute;
+		opacity: 0;
+		pointer-events: none;
+	}
+	.opt__label {
+		font: var(--font-weight-button) var(--text-button) / 1.2 var(--font-button);
+		text-transform: uppercase;
+		letter-spacing: var(--letter-spacing-label);
+	}
+	.opt__price {
+		font: 400 var(--text-label) / 1.2 var(--font-body);
+		color: var(--color-text-secondary);
+	}
+	.opt:has(.opt__input:checked) .opt__price {
+		color: var(--color-accent);
+	}
+
+	/* ---------- Resumo ---------- */
+	.summary {
+		display: grid;
+		gap: var(--space-lg);
+		padding: var(--space-lg);
+		border: 1px solid var(--color-border-subtle);
+		border-radius: var(--radius-sm);
+		background: var(--color-background-secondary);
+	}
+	.summary__title {
+		margin: 0;
+		font: 800 1.25rem / 1.1 var(--font-heading);
+		text-transform: uppercase;
+	}
+	.summary__grid {
+		display: grid;
+		gap: var(--space-lg);
+	}
+	.summary__empty,
+	.summary__warn {
+		margin: 0;
+		color: var(--color-text-secondary);
+	}
+	.summary__warn {
+		color: var(--color-text-primary);
+		font-weight: 700;
+	}
+	.summary__list {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: grid;
+		gap: var(--space-sm);
+	}
+	.summary__list :global(li) {
+		display: flex;
+		justify-content: space-between;
+		gap: var(--space-md);
+		padding-bottom: var(--space-sm);
+		border-bottom: 1px solid var(--color-border-subtle);
+	}
+	.summary__list :global(.line__period) {
+		color: var(--color-text-secondary);
+	}
+	.summary__list :global(.line__price) {
+		font-weight: 800;
+		white-space: nowrap;
+	}
+	.summary__list :global(li) {
+		flex-wrap: wrap;
+	}
+	.summary__list :global(.line__was) {
+		margin-right: var(--space-xs);
+		font-weight: 400;
+		color: var(--color-text-secondary);
+	}
+	.summary__list :global(.line__note) {
+		flex-basis: 100%;
+		font: 400 var(--text-label) / 1.4 var(--font-body);
+		color: var(--color-accent);
+	}
+	.summary__saving {
+		margin: 0;
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: var(--space-md);
+	}
+	.summary__saving[hidden] {
+		display: none;
+	}
+	.summary__saving-value {
+		font: 800 1.25rem / 1 var(--font-display);
+		color: var(--color-accent);
+	}
+	.summary__side {
+		display: grid;
+		gap: var(--space-md);
+		align-content: start;
+	}
+	.summary__total {
+		margin: 0;
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: var(--space-md);
+	}
+	.summary__total-label {
+		font: var(--font-weight-label) var(--text-label) / 1.2 var(--font-label);
+		letter-spacing: var(--letter-spacing-label);
+		text-transform: uppercase;
+		color: var(--color-text-secondary);
+	}
+	.summary__total-value {
+		font: 800 clamp(1.75rem, 4vw, 2.5rem) / 1 var(--font-display);
+		color: var(--color-accent);
+	}
+	.summary__benefits {
+		padding-top: var(--space-md);
+		border-top: 1px solid var(--color-border-subtle);
+		display: grid;
+		gap: var(--space-sm);
+	}
+	.summary__benefits-title {
+		margin: 0;
+		font: var(--font-weight-label) var(--text-label) / 1.2 var(--font-label);
+		letter-spacing: var(--letter-spacing-label);
+		text-transform: uppercase;
+		color: var(--color-text-secondary);
+	}
+	.summary__benefits-list {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: grid;
+		gap: var(--space-xs);
+	}
+	.summary__benefits-list li {
+		display: flex;
+		gap: var(--space-sm);
+		align-items: baseline;
+	}
+	.plan__check {
+		color: var(--color-accent);
+		font-weight: 800;
+	}
+
+	/* ---------- Botão ---------- */
+	.plan__cta {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-height: 3rem;
+		padding: 0 var(--space-lg);
+		border-radius: var(--radius-pill);
+		border: 1px solid var(--color-accent);
+		background: var(--color-accent);
+		color: var(--color-on-accent);
+		font: var(--font-weight-button) var(--text-button) / 1 var(--font-button);
+		letter-spacing: var(--letter-spacing-label);
+		text-transform: uppercase;
+		text-decoration: none;
+		transition: background-color var(--motion-duration-fast) var(--motion-ease),
+			color var(--motion-duration-fast) var(--motion-ease);
+	}
+	.plan__cta:hover {
+		background: var(--color-text-primary);
+		border-color: var(--color-text-primary);
+	}
+	.plan__cta:focus-visible {
+		outline: 2px solid var(--color-text-primary);
+		outline-offset: 3px;
+	}
+	.plan__cta[aria-disabled='true'] {
+		background: transparent;
+		border-color: var(--color-border-subtle);
+		color: var(--color-text-secondary);
+		pointer-events: none;
+	}
+
+	/* ---------- Personal Trainer ---------- */
+	.pt {
+		display: grid;
+		gap: var(--space-lg);
+		padding: var(--space-lg);
+		border: 1px solid var(--color-border-subtle);
+		border-left: 0.5rem solid var(--color-accent);
+		border-radius: var(--radius-sm);
+		background: var(--color-background-secondary);
+	}
+	.pt__title {
+		margin: 0 0 var(--space-sm);
+		font: 800 clamp(2rem, 5vw, 3.5rem) / 1 var(--font-display);
+		letter-spacing: -0.02em;
+		text-transform: uppercase;
+	}
+	.pt__text {
+		margin: 0;
+		max-width: 36rem;
+		color: var(--color-text-secondary);
+		line-height: 1.6;
+	}
+	.pt__formats {
+		display: grid;
+		gap: var(--space-xs);
+		margin: 0;
+		padding: 0;
+		border: 0;
+		min-width: 0;
+	}
+	.pt__legend {
+		padding: 0;
+		margin-bottom: var(--space-sm);
+		font: var(--font-weight-label) var(--text-label) / 1.2 var(--font-label);
+		letter-spacing: var(--letter-spacing-label);
+		text-transform: uppercase;
+		color: var(--color-text-secondary);
+	}
+	.pt .plan__cta {
+		justify-self: start;
+	}
+
+	/* ---------- Responsivo ---------- */
+	@media (min-width: 48rem) {
+		.mods {
+			grid-template-columns: repeat(3, 1fr);
+		}
+		.mod__pick {
+			min-height: 28rem;
+		}
+		.summary__grid {
+			grid-template-columns: 1.4fr 1fr;
+			gap: var(--space-xl);
+		}
+		.pt {
+			grid-template-columns: 1fr 1fr;
+			align-items: center;
+		}
+		.pt__head {
+			grid-column: 1;
+		}
+		.pt__formats {
+			grid-column: 2;
+			grid-row: 1 / span 2;
+		}
+		.pt .plan__cta {
+			grid-column: 1;
+		}
+	}
+	/* Celular na horizontal: cards mais baixos, 2 colunas de períodos mantidas */
+	@media (max-height: 30rem) and (orientation: landscape) {
+		.mod__pick {
+			min-height: 16rem;
+		}
+	}
+	@media (max-width: 47.99rem) {
+		.mod__options {
+			grid-template-columns: repeat(2, 1fr);
+		}
+	}
+</style>
+
+<script>
+	// Seleção de modalidades, periodicidade por modalidade e resumo.
+	// Os preços são só de exibição; o servidor deve revalidar na contratação.
+	const root = document.querySelector<HTMLElement>('[data-plans]');
+	if (root) {
+		type Prices = Record<string, Record<string, number | null>>;
+		const prices: Prices = JSON.parse(root.dataset.prices ?? '{}');
+		const periodLabel: Record<string, string> = Object.fromEntries(
+			(JSON.parse(root.dataset.periods ?? '[]') as { id: string; label: string }[]).map((p) => [p.id, p.label]),
+		);
+		const brl = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+
+		const mods = root.querySelectorAll<HTMLElement>('[data-mod]');
+		const list = root.querySelector<HTMLElement>('[data-lines]')!;
+		const empty = root.querySelector<HTMLElement>('[data-empty]')!;
+		const warn = root.querySelector<HTMLElement>('[data-warn]')!;
+		const totalEl = root.querySelector<HTMLElement>('[data-total]')!;
+		const cta = root.querySelector<HTMLAnchorElement>('[data-cta]')!;
+		const savingEl = root.querySelector<HTMLElement>('[data-saving]')!;
+		const savingValue = root.querySelector<HTMLElement>('[data-saving-value]')!;
+
+		type Bundle = { modalities: string[]; prices: Record<string, number | null> };
+		const bundles: Bundle[] = JSON.parse(root.dataset.bundles ?? '[]');
+		const exclusive: string[][] = JSON.parse(root.dataset.exclusive ?? '[]');
+
+		// `original` = soma dos preços individuais (só nas combinações), para mostrar o desconto.
+		type Line = {
+			ids: string[];
+			names: string[];
+			period: string;
+			price: number | null;
+			combo: boolean;
+			original?: number;
+		};
+
+		const render = () => {
+			list.replaceChildren();
+
+			// 1) Seleções ativas, com o período escolhido em cada modalidade.
+			const picked: { id: string; name: string; period: string }[] = [];
+			mods.forEach((m) => {
+				const check = m.querySelector<HTMLInputElement>('.mod__check')!;
+				const fs = m.querySelector<HTMLFieldSetElement>('.mod__period')!;
+				fs.disabled = !check.checked;
+				if (!check.checked) return;
+				picked.push({
+					id: m.dataset.mod!,
+					name: m.dataset.name ?? m.dataset.mod!,
+					period: m.querySelector<HTMLInputElement>('.opt__input:checked')?.value ?? '',
+				});
+			});
+
+			// 2) Linhas: aplica o preço de combo quando todas as modalidades da
+			//    combinação estão no mesmo período e há preço nele; senão, individual.
+			const used = new Set<string>();
+			const lines: Line[] = [];
+			bundles.forEach((b) => {
+				const parts = picked.filter((p) => b.modalities.includes(p.id));
+				if (parts.length !== b.modalities.length || parts.some((p) => used.has(p.id))) return;
+				const period = parts[0].period;
+				if (!parts.every((p) => p.period === period)) return;
+				const price = b.prices[period] ?? null;
+				if (price === null) return;
+				parts.forEach((p) => used.add(p.id));
+				const singles = parts.map((p) => prices[p.id]?.[period] ?? null);
+				const original = singles.every((v) => v !== null)
+					? (singles as number[]).reduce((a, v) => a + v, 0)
+					: undefined;
+				lines.push({ ids: b.modalities, names: parts.map((p) => p.name), period, price, combo: true, original });
+			});
+			picked.forEach((p) => {
+				if (used.has(p.id)) return;
+				lines.push({ ids: [p.id], names: [p.name], period: p.period, price: prices[p.id]?.[p.period] ?? null, combo: false });
+			});
+
+			// 3) Desenha o resumo e o total.
+			let total = 0;
+			let saving = 0;
+			let invalid = false;
+			lines.forEach((l) => {
+				const li = document.createElement('li');
+				const name = document.createElement('span');
+				name.textContent = l.names.join(' + ');
+				const per = document.createElement('span');
+				per.className = 'line__period';
+				per.textContent = ` · ${periodLabel[l.period] ?? ''}${l.combo ? ' · plano combinado' : ''}`;
+				name.append(per);
+				const val = document.createElement('span');
+				val.className = 'line__price';
+				if (l.price === null) {
+					invalid = true;
+					val.textContent = 'Em breve';
+				} else {
+					total += l.price;
+					if (l.combo && l.original !== undefined && l.original > l.price) {
+						// Soma dos planos individuais riscada + preço do plano combinado
+						const was = document.createElement('s');
+						was.className = 'line__was';
+						was.textContent = brl.format(l.original);
+						val.append(was, ` ${brl.format(l.price)}`);
+					} else {
+						val.textContent = brl.format(l.price);
+					}
+				}
+				li.append(name, val);
+				if (l.combo && l.original !== undefined && l.price !== null && l.original > l.price) {
+					const diff = l.original - l.price;
+					saving += diff;
+					const note = document.createElement('span');
+					note.className = 'line__note';
+					note.textContent = `Soma dos planos individuais: ${brl.format(l.original)} · Desconto do plano combinado: ${brl.format(diff)}`;
+					li.append(note);
+				}
+				list.append(li);
+			});
+			savingEl.hidden = saving === 0;
+			savingValue.textContent = brl.format(saving);
+
+			list.hidden = lines.length === 0;
+			empty.hidden = lines.length > 0;
+			warn.hidden = !invalid;
+			totalEl.textContent = brl.format(invalid ? 0 : total);
+			const ready = lines.length > 0 && !invalid;
+			cta.setAttribute('aria-disabled', String(!ready));
+			cta.tabIndex = ready ? 0 : -1;
+		};
+
+		// Grupos excludentes: marcar uma modalidade desmarca as outras do grupo.
+		root.addEventListener('change', (e) => {
+			const t = e.target as HTMLInputElement;
+			if (t.classList.contains('mod__check') && t.checked) {
+				exclusive.forEach((group) => {
+					if (!group.includes(t.value)) return;
+					group.filter((id) => id !== t.value).forEach((id) => {
+						const other = root.querySelector<HTMLInputElement>(`#mod-${id}`);
+						if (other) other.checked = false;
+					});
+				});
+			}
+			render();
+		});
+		cta.addEventListener('click', (e) => {
+			if (cta.getAttribute('aria-disabled') === 'true') e.preventDefault();
+		});
+		render();
+	}
+</script>
