@@ -19,6 +19,8 @@ a:focus-visible, button:focus-visible, input:focus-visible {
 	display: flex; align-items: center; justify-content: space-between; gap: var(--space-md);
 	height: var(--header-height); padding: 0 var(--layout-gutter);
 	box-shadow: var(--shadow-header);
+	position: sticky; top: 0; z-index: var(--z-header);
+	background: var(--color-overlay); backdrop-filter: blur(12px);
 }
 .bar__brand img { height: 2.5rem; width: auto; display: block; }
 .bar__user { display: flex; align-items: center; gap: var(--space-md); margin: 0; }
