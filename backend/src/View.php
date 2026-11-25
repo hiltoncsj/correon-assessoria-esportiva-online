@@ -32,7 +32,12 @@ final class View
     {
         http_response_code($status);
         $vars['flash'] = Http::takeFlash();
-        $vars['user'] = Auth::user();
+        try {
+            $vars['user'] = Auth::user();
+        } catch (\Throwable $e) {
+            error_log('[view] ' . $e->getMessage());
+            $vars['user'] = null; // banco indisponível: a página de erro ainda é exibida
+        }
         $vars['csrf'] = Http::csrfToken();
         extract($vars, EXTR_SKIP);
         ob_start();

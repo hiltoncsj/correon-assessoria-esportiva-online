@@ -10,7 +10,14 @@ DirectoryIndex index.html
 	# RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 
 	# Rotas da aplicação PHP (a Landing continua estática)
-	RewriteRule ^(api|entrar|cadastro|recuperar-senha|redefinir-senha|sair|app|treinador|admin|termos|privacidade)(/.*)?$ app.php [L,QSA]
+	RewriteRule ^(api|entrar|trocar-senha|cadastro|recuperar-senha|redefinir-senha|sair|app|treinador|admin|termos|privacidade)(/.*)?$ app.php [L,QSA]
+</IfModule>
+
+# Cabeçalhos de segurança (também na Landing estática)
+<IfModule mod_headers.c>
+	Header set X-Content-Type-Options "nosniff"
+	Header set X-Frame-Options "SAMEORIGIN" "expr=-z resp('X-Frame-Options')"
+	Header set Referrer-Policy "strict-origin-when-cross-origin" "expr=-z resp('Referrer-Policy')"
 </IfModule>
 
 # Nunca servir arquivos ocultos ou de configuração

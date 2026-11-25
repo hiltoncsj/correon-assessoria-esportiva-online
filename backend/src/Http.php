@@ -75,7 +75,7 @@ final class Http
     public static function redirect(string $path): never
     {
         // Só caminhos internos (evita open redirect).
-        if ($path === '' || $path[0] !== '/' || str_starts_with($path, '//')) {
+        if ($path === '' || $path[0] !== '/' || str_starts_with($path, '//') || str_contains($path, '\\') || preg_match('/[\r\n]/', $path)) {
             $path = '/';
         }
         header('Location: ' . $path, true, 303);

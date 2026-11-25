@@ -1404,5 +1404,102 @@ check('comunicado vai só para os atletas da modalidade', $ids == $corrida && co
 check('comunicado escapado na área do atleta', str_contains($b, '&lt;b&gt;sábado') && !str_contains($b, '<b>sábado</b>'));
 @unlink($tmpPng); @unlink($tmpPhp);
 
+echo "Estabilização — reforços de segurança\n";
+$timeLogin = static function (string $email): float {
+    $c = new Client();
+    $csrf = $c->csrf('/entrar');
+    $best = INF;
+    for ($i = 0; $i < 8; $i++) {
+        Db::run('DELETE FROM rate_events');
+        $s = hrtime(true);
+        $c->req('POST', '/entrar', ['_csrf' => $csrf, 'email' => $email, 'password' => 'errada-errada-123']);
+        $best = min($best, (hrtime(true) - $s) / 1e6);
+    }
+    return $best;
+};
+$known = $timeLogin('maria@example.com');
+$unknown = $timeLogin('ninguem-aqui@example.com');
+check('login não revela se o e-mail existe pelo tempo de resposta', $unknown < $known * 1.8 && $unknown > $known * 0.5, sprintf('existe %.0f ms / não existe %.0f ms', $known, $unknown));
+Db::run('DELETE FROM rate_events');
+$adm = new Client(); $adm->post('/entrar', ['email' => 'adm@example.com', 'password' => 'senha-staff-12345']);
+foreach (['/admin/atletas?q[]=x', '/admin/auditoria?pagina[]=1&dia[]=2', '/admin/conteudo?tipo[]=news', '/admin/financeiro?mes[]=1'] as $u) {
+    [$s] = $adm->req('GET', $u);
+    check("parâmetro em formato de lista não quebra: $u", $s === 200, "status=$s");
+}
+
+echo "Senha provisória para treinador\n";
+Db::run('DELETE FROM rate_events');
+$adm = new Client(); $adm->post('/entrar', ['email' => 'adm@example.com', 'password' => 'senha-staff-12345']);
+$mk = static fn (array $o) => $adm->post('/admin/treinadores', $o + ['name' => 'Prof Provisorio', 'email' => 'prov@example.com'], '/admin/treinadores');
+[$s] = $mk(['temp_password' => 'curta']);
+check('senha provisória curta é recusada', $s === 422 && !Db::one("SELECT id FROM users WHERE email = 'prov@example.com'"));
+[$s] = $mk(['temp_password' => 'provisoria-2026']);
+check('treinador criado com senha provisória', $s === 303 && (int) Db::one("SELECT must_change_password m FROM users WHERE email = 'prov@example.com'")['m'] === 1);
+check('a senha provisória não é guardada em texto nem na auditoria', !Db::one("SELECT id FROM audit_log WHERE details LIKE '%provisoria-2026%'"));
+$pv = new Client();
+[$s] = $pv->post('/entrar', ['email' => 'prov@example.com', 'password' => 'provisoria-2026']);
+check('primeiro acesso vai direto para trocar a senha', $s === 303 && $pv->header('Location') === '/trocar-senha');
+foreach (['/treinador', '/treinador/atletas', '/treinador/modelos'] as $u) {
+    [$s] = $pv->req('GET', $u);
+    check("antes de trocar, $u é bloqueado", $s === 303 && $pv->header('Location') === '/trocar-senha');
+}
+[$s] = $pv->post('/trocar-senha', ['password' => 'provisoria-2026', 'password2' => 'provisoria-2026']);
+check('não aceita manter a senha provisória', $s === 422);
+[$s] = $pv->post('/trocar-senha', ['password' => 'minha-senha-nova-1', 'password2' => 'outra-coisa-123']);
+check('confirmação diferente = 422', $s === 422);
+[$s] = $pv->post('/trocar-senha', ['password' => 'minha-senha-nova-1', 'password2' => 'minha-senha-nova-1']);
+check('define a própria senha e vai para o painel', $s === 303 && $pv->header('Location') === '/treinador');
+[$s] = $pv->req('GET', '/treinador');
+check('painel liberado depois da troca', $s === 200);
+[$s] = $pv->req('GET', '/trocar-senha');
+check('a tela de troca não fica acessível depois', $s === 303);
+$old = new Client(); Db::run('DELETE FROM rate_events');
+[$s] = $old->post('/entrar', ['email' => 'prov@example.com', 'password' => 'provisoria-2026']);
+check('senha provisória deixa de funcionar', $s === 401);
+
+echo "Excluir conta de treinador\n";
+Db::run('DELETE FROM rate_events');
+$adm = new Client(); $adm->post('/entrar', ['email' => 'adm@example.com', 'password' => 'senha-staff-12345']);
+$mkT = static function (string $email) use ($adm, $uid): int {
+    $adm->post('/admin/treinadores', ['name' => 'Coach Apagar', 'email' => $email, 'temp_password' => 'provisoria-2026'], '/admin/treinadores');
+    return $uid($email);
+};
+$del = static fn (Client $c, int $id, string $page) => $c->post("/admin/usuarios/$id/excluir", [], $page);
+$limpo = $mkT('del1@example.com');
+[$s, $b] = $adm->req('GET', "/admin/treinadores/$limpo");
+check('página do treinador tem o botão Excluir conta', str_contains($b, "/admin/usuarios/$limpo/excluir"));
+[$s, $b] = $adm->req('GET', "/admin/atletas/" . $uid('eva@example.com'));
+check('página do atleta NÃO tem o botão', !str_contains($b, '/excluir"'));
+[$s] = $del($tr1, $limpo, '/treinador');
+check('treinador não exclui contas (403)', $s === 403 && Db::one('SELECT id FROM users WHERE id = ?', [$limpo]) !== null);
+[$s] = $adm->req('POST', "/admin/usuarios/$limpo/excluir");
+check('excluir sem CSRF = 419', $s === 419);
+[$s] = $del($adm, $limpo, "/admin/treinadores/$limpo");
+check('sem histórico: conta apagada de verdade', $s === 303 && !Db::one('SELECT id FROM users WHERE id = ?', [$limpo]));
+$com = $mkT('del2@example.com');
+$cli('assign-trainer.php', ['assign', 'del2@example.com', 'eva@example.com', 'corrida']);
+$del($adm, $com, "/admin/treinadores/$com");
+check('com atleta vinculado: recusa', Db::one('SELECT deleted_at d FROM users WHERE id = ?', [$com])['d'] === null && Db::one('SELECT status s FROM users WHERE id = ?', [$com])['s'] === 'active');
+$cli('assign-trainer.php', ['end', 'del2@example.com', 'eva@example.com', 'corrida']);
+[$s] = $del($adm, $com, "/admin/treinadores/$com");
+$row = Db::one('SELECT status, deleted_at, email, name FROM users WHERE id = ?', [$com]);
+check('com histórico: desativa, marca como excluído e libera o e-mail', $s === 303 && $row['status'] === 'blocked' && $row['deleted_at'] !== null && str_ends_with($row['email'], '@conta.invalid') && str_contains($row['name'], '(excluído)'));
+check('histórico preservado', Db::one('SELECT id FROM trainer_athletes WHERE trainer_id = ?', [$com]) !== null);
+[$s, $b] = $adm->req('GET', '/admin/treinadores');
+check('conta excluída sai da lista', !str_contains($b, "/admin/treinadores/$com\""));
+[$s] = $adm->req('GET', "/admin/treinadores/$com");
+check('e a página dela deixa de existir (404)', $s === 404);
+Db::run('DELETE FROM rate_events');
+$gone = new Client();
+[$s] = $gone->post('/entrar', ['email' => 'del2@example.com', 'password' => 'provisoria-2026']);
+check('conta excluída não entra', $s === 401);
+$again = $mkT('del2@example.com');
+check('o e-mail pode ser usado em um novo cadastro', $again > 0 && $again !== $com);
+[$s] = $del($adm, $uid('adm@example.com'), '/admin');
+check('administrador não pode ser excluído (404)', $s === 404);
+[$s] = $del($adm, $uid('maria@example.com'), '/admin');
+check('atleta não é excluído por esta ação (404)', $s === 404);
+check('exclusão auditada', (int) Db::one("SELECT COUNT(*) c FROM audit_log WHERE action = 'trainer_deleted'")['c'] === 2);
+
 echo "\nResultado: $pass ok, $fail falha(s)\n";
 exit($fail ? 1 : 0);

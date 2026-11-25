@@ -1,36 +1,50 @@
-# Deploy na LocalWeb (Landing + área PHP)
+# Publicação na LocalWeb
 
-## Estrutura no servidor
+## Antes de começar (confirmar)
+- PHP **8.3** selecionado, com extensões pdo_mysql, mbstring, **gd**, **exif**, zlib.
+- `mod_rewrite` ativo, SSL ativo, envio de e-mail (`mail()`/SMTP) funcionando.
+- Banco MariaDB **vazio** e suas credenciais.
+- Textos de Termos e Privacidade publicados antes de abrir cadastros (ver `PENDENCIAS.md`).
 
+## 1. Gerar o pacote (no seu computador, pasta `SiteCorreOn/`)
 ```
-/home/SEU_USUARIO/
-├── correon/                 ← FORA do public_html (não acessível pela web)
-│   ├── src/  views/  migrations/  bin/
-│   ├── storage/             (permissão de escrita; sessões, logs, e-mails de teste)
-│   └── .env                 (credenciais de produção, criado por você no servidor)
-└── public_html/             ← conteúdo de dist/ + arquivos abaixo
-    ├── (dist/*: index.html, _astro/, favicon...)
-    ├── app.php              (de backend/public/app.php)
-    ├── .user.ini            (de backend/public/.user.ini)
-    ├── .htaccess            (de backend/public/.htaccess)
-    └── assets/              (app.css, tokens.css, logo-correon.png)
+npm run deploy:package
+```
+Cria `deploy/` com:
+```
+deploy/public_html/        -> o CONTEÚDO vai para o public_html
+deploy/correon/            -> vai FORA do public_html (ao lado dele)
+deploy/instalar-banco.sql  -> instalação do banco vazio
+deploy/LEIA-ME.md          -> este guia
 ```
 
-## Passo a passo
+## 2. Banco de dados
+phpMyAdmin → banco → **Importar** `instalar-banco.sql`. (Somente em banco vazio.)
 
-1. Local: `npm run build` e `npm run sync:app-assets`.
-2. FileZilla: envie `dist/*` para `public_html/`; envie `backend/public/app.php`, `backend/public/.htaccess` e `backend/public/assets/*` (para `public_html/assets/`, sem sobrescrever `_astro/`).
-3. Envie `backend/src`, `backend/views`, `backend/migrations`, `backend/bin` para `correon/` e crie `correon/storage/` (escrita).
-4. Crie `correon/.env` no servidor a partir de `.env.example` (`APP_ENV=production`, `DB_*` reais, `MAIL_DRIVER=mail`). **Nunca** envie o `.env` local.
-5. Aplicar migrações (sem SSH): temporariamente, via painel/cron rodando `php ~/correon/bin/migrate.php`, ou importando os `.sql` de `migrations/` no phpMyAdmin, em ordem.
-6. Criar o primeiro administrador: `CORREON_NEW_PASSWORD='...' php ~/correon/bin/create-user.php admin "Nome" email` (via cron único ou SSH, se houver).
-7. Ative o redirecionamento HTTPS no `.htaccess` (linhas comentadas) depois de confirmar o SSL.
-8. Teste: `/entrar`, `/cadastro`, `/recuperar-senha` (e-mail chega?), acesso negado entre perfis.
+## 3. Primeiro administrador (sem terminal no servidor)
+No seu computador, na pasta `SiteCorreOn/`:
+```
+C:\xampp\php\php.exe backend\bin\admin-sql.php "Seu Nome" seu@email.com
+```
+Digite uma senha de 12+ caracteres, copie as linhas geradas e execute na aba **SQL** do phpMyAdmin. Não salve esse texto em arquivo.
 
-## Conteúdo e fotos (Sprint 8)
-- A Hero 7 usa `/api/v1/public/...`: o `.htaccess` precisa estar ativo (rota `api`).
-- `correon/storage/uploads/` precisa de permissão de escrita e deve entrar no backup (fotos).
-- Requer as extensões PHP **GD** e **EXIF**; `.user.ini` define o tamanho de upload.
+## 4. Enviar pelo FileZilla
+1. Conteúdo de `deploy/public_html/` → `public_html/`. Ative "mostrar arquivos ocultos": `.htaccess` e `.user.ini` precisam ir.
+2. Pasta `deploy/correon/` → **ao lado** do `public_html`, nunca dentro.
+3. Permissão de escrita em `correon/storage/`.
 
-## Pendente de confirmar com a LocalWeb
-SSH/Composer, `mod_rewrite` ativo, SMTP/`mail()` entregando e-mail, versão do PHP selecionada (8.3).
+## 5. Configurar
+Crie `correon/.env` a partir de `correon/.env.example`: `APP_ENV=production`, `APP_URL=https://seudominio`, `DB_*` reais, `MAIL_DRIVER=mail`, `MAIL_FROM` de um endereço do domínio. **Nunca** envie o `.env` do seu computador.
+
+## 6. Conferir
+- Se houver SSH ou cron de comando: `php correon/bin/check.php` deve terminar com "Tudo certo".
+- No `.htaccess`, **descomente o redirecionamento para HTTPS** depois de ver o SSL funcionando.
+- No navegador: `/` (site), `/entrar`, login do administrador, `/cadastro` com um e-mail seu, **recuperar senha** (o e-mail precisa chegar), criar um treinador, publicar uma notícia e vê-la na seção "Em movimento".
+- `https://seudominio/.user.ini` deve dar acesso negado.
+
+## 7. Depois
+- Agendar o backup (`BACKUP.md`).
+- Olhar `correon/storage/php-error.log` nos primeiros dias.
+
+## Atualizações futuras
+Faça backup antes. `npm run deploy:package` e envie `public_html/` e `correon/` **sem apagar** `correon/.env` nem `correon/storage/`. Migração nova: `php correon/bin/migrate.php` (cron/SSH) ou execute o `.sql` novo de `correon/migrations/` no phpMyAdmin e registre: `INSERT INTO schema_migrations (filename) VALUES ('nome.sql');`

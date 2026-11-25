@@ -1,4 +1,4 @@
-# PENDÊNCIAS — decisões a tomar (atualizado ao fim da Sprint 8)
+# PENDÊNCIAS — decisões a tomar (atualizado após a estabilização)
 
 Será revisado e apresentado ao fim da Sprint 9. Nada abaixo foi presumido no sistema além do indicado em "Hoje".
 
@@ -9,8 +9,9 @@ Será revisado e apresentado ao fim da Sprint 9. Nada abaixo foi presumido no si
 | A1 | Textos de **Termos de Uso** e **Política de Privacidade** (com responsável LGPD) | Páginas "em elaboração"; aceite gravado como `rascunho-0` |
 | A2 | Texto da autorização de divulgação de nome, resultados e fotos (inclusive **menores**) | Redação provisória |
 | A3 | LocalWeb: `mail()`/SMTP entrega e-mail? `mod_rewrite`, `.user.ini`, extensão GD, PHP 8.3, cron, SSH | Não confirmado; sem e-mail a recuperação de senha não funciona |
-| A4 | Backup do banco e das fotos (`storage/uploads`) e teste de restauração | Sem rotina |
-| A5 | Quem é o administrador de produção; senha forte | A criar |
+| A4 | Agendar o backup na hospedagem e baixar cópias (`BACKUP.md`) | Script pronto e restauração testada localmente |
+| A5 | Quem é o administrador de produção; senha forte | A criar com `bin/admin-sql.php` |
+| A6 | Testar com **PHP 8.3** antes de publicar (local é 8.0) | Só checagem estática; posso instalar o 8.3 para rodar a suíte, se autorizar |
 
 ## B. Comercial e pagamentos
 
@@ -76,6 +77,6 @@ Será revisado e apresentado ao fim da Sprint 9. Nada abaixo foi presumido no si
 | G3 | Páginas Resultados/Notícias/Eventos e formulário de **Contato** | Hoje só seções da Landing |
 | G4 | Links Entrar/Cadastro no site | Depende de E6 |
 | G5 | Telas de Configurações e de Permissões no admin; edição de modalidades | Perfis fixos (atleta, treinador, admin) |
-| G6 | Publicação na LocalWeb | Nada foi publicado ainda |
-| G7 | Revisão de segurança dedicada, política de retenção/exclusão de dados (LGPD) e roteiro de backup | Fariam parte da estabilização |
+| G6 | Publicação na LocalWeb | Pacote pronto e testado localmente; nada publicado |
+| G7 | Política de retenção e exclusão de dados de atletas (LGPD); auditoria de segurança independente | Revisão interna e backup feitos |
 | G8 | CorreON Connect (Garmin etc.) | Fora do escopo por decisão inicial |

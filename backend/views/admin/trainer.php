@@ -43,4 +43,4 @@ use Correon\Templates;
 	<?php endif; ?>
 </section>
 
-<?php require BASE_PATH . '/views/partials/account.php'; ?>
+<?php $canDelete = true; require BASE_PATH . '/views/partials/account.php'; ?>

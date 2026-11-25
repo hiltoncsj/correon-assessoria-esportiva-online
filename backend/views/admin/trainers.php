@@ -10,7 +10,10 @@
 		<label class="field">Nome completo<input type="text" name="name" value="<?= e($old['name']) ?>" maxlength="120"></label>
 		<label class="field">E-mail<input type="email" name="email" value="<?= e($old['email']) ?>" maxlength="190"></label>
 	</div>
-	<p class="muted">Você não define a senha: o sistema gera um link para o treinador criar a dele.</p>
+	<label class="field">Senha provisória (mínimo 10 caracteres)
+		<input type="text" name="temp_password" maxlength="72" autocomplete="off" spellcheck="false">
+	</label>
+	<p class="muted">O treinador entra com ela e é obrigado a trocar no primeiro acesso. Use uma senha diferente para cada pessoa. Se deixar em branco, o sistema gera um link para ele criar a própria senha.</p>
 	<div class="actions"><button class="btn btn--sm" type="submit">Cadastrar treinador</button></div>
 </form>
 

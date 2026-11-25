@@ -180,15 +180,26 @@ final class Admin
         if (strlen($email) > 190 || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
             self::trainersView($old, 'Informe um e-mail válido.', 422);
         }
+        $temp = (string) ($_POST['temp_password'] ?? '');
+        if ($temp !== '' && ($err = Auth::passwordError($temp)) !== null) {
+            self::trainersView($old, 'Senha provisória: ' . $err, 422);
+        }
         try {
-            $id = Auth::createUser($name, $email, bin2hex(random_bytes(24)), 'trainer', false);
+            $id = Auth::createUser($name, $email, $temp !== '' ? $temp : bin2hex(random_bytes(24)), 'trainer', false);
         } catch (\PDOException $e) {
             if ($e->getCode() !== '23000') {
                 throw $e;
             }
             self::trainersView($old, 'Já existe uma conta com este e-mail.', 422);
         }
-        Audit::log('trainer_created', (int) $me['id'], 'user', $id);
+        if ($temp !== '') {
+            Db::run('UPDATE users SET must_change_password = 1 WHERE id = ?', [$id]);
+        }
+        Audit::log('trainer_created', (int) $me['id'], 'user', $id, ['temporary_password' => $temp !== '']);
+        if ($temp !== '') {
+            Http::flash('ok', 'Treinador criado com a senha provisória. Informe a ele o e-mail e a senha; no primeiro acesso ele terá de criar a própria.');
+            Http::redirect('/admin/treinadores/' . $id);
+        }
         $link = self::sendPasswordLink($id, $email, $name, 'Sua conta de treinador na CorreON foi criada.');
         Http::flash('ok', 'Treinador criado. Link para ele criar a senha (vale ' . self::INVITE_HOURS . ' h, uso único): ' . $link);
         Http::redirect('/admin/treinadores/' . $id);
@@ -287,6 +298,67 @@ final class Admin
         Mailer::send($email, 'CorreON — defina sua senha',
             "Olá, $name.\n\n$intro\nCrie sua senha pelo link abaixo (válido por " . self::INVITE_HOURS . " horas, uso único):\n$link\n");
         return $link;
+    }
+
+    /**
+     * Excluir conta de TREINADOR. Sem nenhum registro: apaga de verdade. Com histórico (treinos, modelos,
+     * vínculos antigos...): desativa a conta, tira das listas, libera o e-mail e PRESERVA o histórico.
+     * Com atletas ou Personal ativos, recusa: primeiro é preciso encerrar.
+     */
+    public static function deleteTrainer(int $id): never
+    {
+        $me = self::admin();
+        $trainer = self::userWithRole($id, 'trainer'); // atletas e administradores: 404
+        if (Db::one('SELECT 1 ok FROM ' . self::withRole('admin') . ' WHERE u.id = ?', [$id])
+            || Db::one('SELECT 1 ok FROM ' . self::withRole('athlete') . ' WHERE u.id = ?', [$id])) {
+            App::notFound();
+        }
+        $links = (int) Db::one("SELECT COUNT(DISTINCT athlete_id) c FROM trainer_athletes WHERE trainer_id = ? AND status = 'active'", [$id])['c'];
+        $pt = Personal::activeAthletes($id);
+        $sessions = (int) Db::one("SELECT COUNT(*) c FROM pt_sessions WHERE trainer_id = ? AND status IN ('requested','approved') AND starts_at > NOW()", [$id])['c'];
+        if ($links || $pt || $sessions) {
+            Http::flash('err', "Não é possível excluir: este treinador tem $links atleta(s) vinculado(s), $pt com Personal ativo e $sessions sessão(ões) pendente(s). Encerre os vínculos e o Personal primeiro (ou apenas bloqueie a conta).");
+            Http::redirect('/admin/treinadores/' . $id);
+        }
+
+        $erased = true;
+        $pdo = Db::pdo();
+        $pdo->beginTransaction();
+        try {
+            foreach (['password_resets', 'consents', 'notifications', 'user_roles'] as $table) {
+                Db::run("DELETE FROM $table WHERE user_id = ?", [$id]); // nomes de tabela constantes
+            }
+            Db::run('DELETE FROM trainer_availability WHERE trainer_id = ?', [$id]);
+            Db::run('DELETE FROM trainer_settings WHERE trainer_id = ?', [$id]);
+            Db::run('DELETE FROM users WHERE id = ?', [$id]);
+            $pdo->commit();
+        } catch (\PDOException $e) {
+            $pdo->rollBack();
+            if ($e->getCode() !== '23000') {
+                throw $e;
+            }
+            $erased = false; // há registros que dependem da conta
+        }
+        if (!$erased) {
+            $pdo->beginTransaction();
+            try {
+                Db::run('DELETE FROM user_roles WHERE user_id = ?', [$id]);
+                Db::run('DELETE FROM password_resets WHERE user_id = ?', [$id]);
+                Db::run('DELETE FROM trainer_availability WHERE trainer_id = ?', [$id]);
+                Db::run(
+                    "UPDATE users SET status = 'blocked', deleted_at = NOW(), session_version = session_version + 1, must_change_password = 0,
+                       name = ?, email = ?, password_hash = ? WHERE id = ?",
+                    [mb_substr($trainer['name'], 0, 108) . ' (excluído)', "excluido-$id@conta.invalid", password_hash(bin2hex(random_bytes(24)), PASSWORD_DEFAULT), $id]
+                );
+                $pdo->commit();
+            } catch (\Throwable $e) {
+                $pdo->rollBack();
+                throw $e;
+            }
+        }
+        Audit::log('trainer_deleted', (int) $me['id'], 'user', $id, ['history_kept' => !$erased]);
+        Http::flash('ok', $erased ? 'Conta excluída.' : 'Conta excluída. Os treinos e registros antigos foram mantidos no histórico, e o e-mail ficou livre.');
+        Http::redirect('/admin/treinadores');
     }
 
     // ---- relatórios e auditoria ----

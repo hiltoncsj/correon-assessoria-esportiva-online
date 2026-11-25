@@ -20,7 +20,7 @@ final class Auth
         $id = $_SESSION['uid'] ?? null;
         $user = null;
         if (is_int($id)) {
-            $row = Db::one("SELECT id, name, email, status, session_version FROM users WHERE id = ?", [$id]);
+            $row = Db::one("SELECT id, name, email, status, session_version, must_change_password FROM users WHERE id = ?", [$id]);
             if ($row && $row['status'] === 'active' && (int) $row['session_version'] === (int) ($_SESSION['sv'] ?? 0)) {
                 $row['roles'] = array_column(
                     Db::all('SELECT r.slug FROM user_roles ur JOIN roles r ON r.id = ur.role_id WHERE ur.user_id = ?', [$id]),
@@ -76,9 +76,12 @@ final class Auth
     public static function verify(string $email, string $password): ?int
     {
         $row = Db::one('SELECT id, password_hash, status FROM users WHERE email = ?', [$email]);
-        $hash = $row['password_hash'] ?? '$2y$12$usesomesillystringforsaleeOdummyhashdummyhashdummyhashdum';
-        $ok = password_verify($password, $hash);
-        if (!$row || !$ok || $row['status'] !== 'active') {
+        if (!$row) {
+            // gasta o mesmo tempo de uma verificação real (mesmo algoritmo e custo)
+            password_hash($password, PASSWORD_DEFAULT);
+            return null;
+        }
+        if (!password_verify($password, $row['password_hash']) || $row['status'] !== 'active') {
             return null;
         }
         if (password_needs_rehash($row['password_hash'], PASSWORD_DEFAULT)) {

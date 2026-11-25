@@ -67,3 +67,6 @@ backend/config/local.php
 .DS_Store
 Thumbs.db
 backend/public/favicon.svg
+
+# Pacote de publicação (gerado)
+deploy/

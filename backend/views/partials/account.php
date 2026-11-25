@@ -22,6 +22,12 @@
 				<button class="btn btn--sm" type="submit" name="action" value="unblock">Reativar conta</button>
 			<?php endif; ?>
 		</form>
+		<?php if (!empty($canDelete)): ?>
+			<form method="post" action="/admin/usuarios/<?= (int) $person['id'] ?>/excluir">
+				<input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
+				<button class="btn btn--sm btn--danger" type="submit" data-confirm="Excluir a conta de <?= e($person['name']) ?>? Esta ação não pode ser desfeita.">Excluir conta</button>
+			</form>
+		<?php endif; ?>
 	</div>
 </section>
 <script src="<?= e(\Correon\View::asset('/assets/workout-form.js')) ?>" defer></script>

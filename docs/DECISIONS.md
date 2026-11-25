@@ -140,3 +140,9 @@ Aplicado na Hero 6 (`src/data/plans.ts`). **Premissas a confirmar:** (1) valores
 - **Agendamento** por data/hora (sem cron). Nada é excluído: arquiva-se.
 - **Fotos:** só JPG/PNG/WebP até 4 MB; regravadas e reduzidas (1280px), sem metadados; guardadas fora da pasta pública e servidas só se o conteúdo estiver visível.
 - **Avisos** na plataforma: treino publicado/atualizado, semana enviada, resposta de Personal e comunicados do admin (todos ou por modalidade). Sem e-mail/WhatsApp.
+
+## 2026-11-25 — Estabilização (Sprint 9, parte 1) e contas
+- **Segurança:** ver `SECURITY_REVIEW.md`. **Publicação:** `npm run deploy:package` (ver `DEPLOY_LOCALWEB.md`). **Backup:** `BACKUP.md`.
+- Integrações (For All Sports, multiagentes) continuam em espera; nada foi publicado.
+- **Senha provisória (pedido do cliente):** ao cadastrar treinador o admin pode definir uma senha provisória (10+); no primeiro acesso a troca é obrigatória antes de qualquer tela. Em branco, continua o link de uso único.
+- **Excluir conta de treinador (pedido do cliente):** sem registros = apagada; com histórico = desativada, fora das listas, e-mail liberado, histórico preservado (nome com "(excluído)"). Recusada se houver atletas, Personal ativo ou sessões pendentes. Não vale para atletas nem administradores (exclusão de dados de atleta é decisão LGPD pendente).

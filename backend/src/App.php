@@ -9,6 +9,7 @@ final class App
 
     public static function run(): void
     {
+        $_GET = array_filter($_GET, 'is_string');
         $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
         $path = rtrim((string) parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH), '/') ?: '/';
         if (str_starts_with($path, '/api/')) {
@@ -36,6 +37,7 @@ final class App
         $routes = [
             'GET /entrar' => 'loginForm', 'POST /entrar' => 'login',
             'GET /cadastro' => 'registerForm', 'POST /cadastro' => 'register',
+            'GET /trocar-senha' => 'firstPasswordForm', 'POST /trocar-senha' => 'firstPassword',
             'GET /recuperar-senha' => 'forgotForm', 'POST /recuperar-senha' => 'forgot',
             'POST /sair' => 'logout',
             'GET /app' => 'Athlete@dashboard', 'GET /app/perfil' => 'Athlete@profileForm', 'POST /app/perfil' => 'Athlete@profileSave',
@@ -91,6 +93,7 @@ final class App
             ['POST', '#^/admin/treinadores/(\d+)/capacidade$#', 'Admin@setCapacity'],
             ['POST', '#^/admin/usuarios/(\d+)/status$#', 'Admin@setStatus'],
             ['POST', '#^/admin/usuarios/(\d+)/senha$#', 'Admin@resetPassword'],
+            ['POST', '#^/admin/usuarios/(\d+)/excluir$#', 'Admin@deleteTrainer'],
             ['GET', '#^/treinador/atletas/(\d+)$#', 'Trainer@athlete'],
             ['POST', '#^/treinador/atletas/(\d+)/zonas$#', 'Trainer@zonesSave'],
             ['POST', '#^/treinador/atletas/(\d+)/nivel$#', 'Trainer@levelSave'],
@@ -128,6 +131,9 @@ final class App
         $u = Auth::user();
         if ($u === null) {
             Http::redirect('/entrar');
+        }
+        if ((int) $u['must_change_password'] === 1) {
+            Http::redirect('/trocar-senha'); // senha provisória: nada é acessível antes da troca
         }
         if (!in_array($role, $u['roles'], true)) {
             Audit::log('access_denied', (int) $u['id'], 'route', null, ['path' => parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH), 'need' => $role]);
@@ -172,7 +178,8 @@ final class App
         RateLimiter::clear('login', $email);
         Auth::login($id);
         Audit::log('login_success', $id, 'user', $id);
-        Http::redirect(Auth::homeFor(Auth::user()['roles'] ?? []));
+        $me = Auth::user();
+        Http::redirect((int) ($me['must_change_password'] ?? 0) === 1 ? '/trocar-senha' : Auth::homeFor($me['roles'] ?? []));
     }
 
     private static function logout(): never
@@ -185,6 +192,46 @@ final class App
         Http::startSession();
         Http::flash('ok', 'Você saiu da sua conta.');
         Http::redirect('/entrar');
+    }
+
+    // ---- Troca obrigatória da senha provisória --------------------------
+
+    private static function pendingUser(): array
+    {
+        $u = Auth::user();
+        if ($u === null) {
+            Http::redirect('/entrar');
+        }
+        if ((int) $u['must_change_password'] !== 1) {
+            Http::redirect(Auth::homeFor($u['roles']));
+        }
+        return $u;
+    }
+
+    private static function firstPasswordForm(): never
+    {
+        self::pendingUser();
+        View::render('auth/first_password', ['title' => 'Crie a sua senha', 'error' => null]);
+    }
+
+    private static function firstPassword(): never
+    {
+        $u = self::pendingUser();
+        $id = (int) $u['id'];
+        $new = (string) ($_POST['password'] ?? '');
+        $err = Auth::passwordError($new) ?? ($new !== (string) ($_POST['password2'] ?? '') ? 'As senhas não conferem.' : null);
+        $hash = Db::one('SELECT password_hash FROM users WHERE id = ?', [$id])['password_hash'];
+        if ($err === null && password_verify($new, $hash)) {
+            $err = 'Escolha uma senha diferente da provisória.';
+        }
+        if ($err !== null) {
+            View::render('auth/first_password', ['title' => 'Crie a sua senha', 'error' => $err], 422);
+        }
+        Db::run('UPDATE users SET password_hash = ?, must_change_password = 0, session_version = session_version + 1 WHERE id = ?', [password_hash($new, PASSWORD_DEFAULT), $id]);
+        Auth::login($id);
+        Audit::log('password_first_set', $id, 'user', $id);
+        Http::flash('ok', 'Senha definida. Bem-vindo à CorreON!');
+        Http::redirect(Auth::homeFor($u['roles']));
     }
 
     // ---- Cadastro --------------------------------------------------------
@@ -315,7 +362,7 @@ final class App
                 $pdo->rollBack();
                 View::render('auth/reset_invalid', ['title' => 'Link inválido'], 410);
             }
-            Db::run('UPDATE users SET password_hash = ?, session_version = session_version + 1 WHERE id = ?', [password_hash($pass, PASSWORD_DEFAULT), $row['user_id']]);
+            Db::run('UPDATE users SET password_hash = ?, must_change_password = 0, session_version = session_version + 1 WHERE id = ?', [password_hash($pass, PASSWORD_DEFAULT), $row['user_id']]);
             Db::run('UPDATE password_resets SET used_at = NOW() WHERE user_id = ? AND used_at IS NULL', [$row['user_id']]);
             $pdo->commit();
         } catch (\Throwable $e) {
