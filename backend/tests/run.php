@@ -901,5 +901,109 @@ check('outro treinador não remove meu horário (404)', $s === 404 && $slots() =
 [$s] = $tr1->post("/treinador/disponibilidade/$sid/remover", [], '/treinador/disponibilidade');
 check('remove o próprio horário', $s === 303 && $slots() === 1);
 
+echo "Sprint 5 — painel administrativo\n";
+Db::run('DELETE FROM rate_events');
+$adm = new Client(); $adm->post('/entrar', ['email' => 'adm@example.com', 'password' => 'senha-staff-12345']);
+$admId = $uid('adm@example.com');
+foreach (['/admin', '/admin/atletas', '/admin/treinadores', '/admin/relatorios', '/admin/auditoria', "/admin/atletas/$mariaId"] as $path) {
+    [$s] = $adm->req('GET', $path);
+    [$s2] = $tr1->req('GET', $path);
+    [$s3] = $mar->req('GET', $path);
+    [$s4] = $anon->req('GET', $path);
+    check(preg_replace('/\d+/', '{id}', $path) . ': admin 200; treinador e atleta 403; anônimo vai ao login', $s === 200 && $s2 === 403 && $s3 === 403 && $s4 === 303, "$s $s2 $s3 $s4");
+}
+$totalAth = (int) Db::one("SELECT COUNT(*) c FROM user_roles ur JOIN roles r ON r.id = ur.role_id WHERE r.slug = 'athlete'")['c'];
+[$s, $b] = $adm->req('GET', '/admin');
+check('início com contagem real de usuários', str_contains($b, "Atleta: <strong>$totalAth</strong>") && str_contains($b, 'Capacidade dos treinadores'));
+[$s, $b] = $adm->req('GET', '/admin/atletas?q=maria');
+check('busca de atletas por nome', str_contains($b, 'Maria Teste') && !str_contains($b, 'Ana Corredora'));
+[$s, $b] = $adm->req('GET', '/admin/atletas?q=' . urlencode("%' OR '1'='1"));
+check('busca com caracteres especiais não vaza nem quebra', $s === 200 && str_contains($b, '0 atleta(s)'));
+
+echo "Atribuição pela tela\n";
+$eva = new Client(); register($eva, ['email' => 'eva@example.com', 'name' => 'Eva Livre']);
+$evaId = $uid('eva@example.com'); $trnId = $uid('trn@example.com');
+[$s, $b] = $adm->req('GET', '/admin/atletas?sem_treinador=1');
+check('filtro "sem treinador" mostra a nova atleta e não a Maria', str_contains($b, 'Eva Livre') && !str_contains($b, 'Maria Teste'));
+$evaPage = "/admin/atletas/$evaId";
+$linkedE = static fn () => (int) Db::one("SELECT COUNT(*) c FROM trainer_athletes WHERE athlete_id = ? AND status = 'active'", [$evaId])['c'];
+$adm->post("$evaPage/vinculos", ['trainer_id' => (string) $mariaId, 'modality' => 'corrida'], $evaPage);
+check('não aceita atleta como treinador', $linkedE() === 0);
+$adm->post("$evaPage/vinculos", ['trainer_id' => (string) $trnId, 'modality' => 'natacao'], $evaPage);
+check('não aceita modalidade inexistente', $linkedE() === 0);
+[$s] = $tr1->post("$evaPage/vinculos", ['trainer_id' => (string) $trnId, 'modality' => 'corrida'], '/treinador');
+check('treinador não atribui atletas (403)', $s === 403 && $linkedE() === 0);
+$cap = Correon\Capacity::active($trnId);
+$adm->post("/admin/treinadores/$trnId/capacidade", ['online_limit' => (string) $cap, 'presencial_limit' => ''], "/admin/treinadores/$trnId");
+check('admin define o limite do treinador', Correon\Capacity::limit($trnId) === $cap);
+$adm->post("$evaPage/vinculos", ['trainer_id' => (string) $trnId, 'modality' => 'corrida'], $evaPage);
+[$s, $b] = $adm->req('GET', $evaPage);
+check('no limite: bloqueado com explicação', $linkedE() === 0 && str_contains($b, 'Bloqueado'));
+$adm->post("$evaPage/vinculos", ['trainer_id' => (string) $trnId, 'modality' => 'corrida', 'reason' => 'Aluna antiga <b>x</b>'], $evaPage);
+check('com motivo: atribuído e exceção registrada', $linkedE() === 1 && Db::one('SELECT id FROM capacity_exceptions WHERE athlete_id = ?', [$evaId]) !== null);
+check('auditoria registra QUAL admin atribuiu', (int) Db::one("SELECT user_id FROM audit_log WHERE action = 'trainer_assigned' AND entity_id = ? ORDER BY id DESC LIMIT 1", [$evaId])['user_id'] === $admId);
+[$s, $b] = $adm->req('GET', "/admin/treinadores/$trnId");
+check('página do treinador mostra a exceção (texto escapado)', str_contains($b, 'Aluna antiga &lt;b&gt;') && !str_contains($b, '<b>x</b>'));
+foreach (['0', '1001', 'abc'] as $bad) {
+    $adm->post("/admin/treinadores/$trnId/capacidade", ['online_limit' => $bad, 'presencial_limit' => ''], "/admin/treinadores/$trnId");
+}
+check('limite inválido é recusado', Correon\Capacity::limit($trnId) === $cap);
+$adm->post("/admin/treinadores/$trnId/capacidade", ['online_limit' => '30', 'presencial_limit' => '8'], "/admin/treinadores/$trnId");
+check('limite presencial separado', (int) Db::one('SELECT presencial_limit p FROM trainer_settings WHERE trainer_id = ?', [$trnId])['p'] === 8);
+[$s] = $tr1->req('GET', "/treinador/atletas/$evaId");
+check('o treinador passa a ver a atleta atribuída', $s === 200);
+$adm->post("$evaPage/vinculos/encerrar", ['trainer_id' => (string) $trnId, 'modality' => 'corrida'], $evaPage);
+[$s] = $tr1->req('GET', "/treinador/atletas/$evaId");
+check('encerrar o vínculo tira o acesso e mantém o histórico', $linkedE() === 0 && $s === 404 && Db::one("SELECT id FROM trainer_athletes WHERE athlete_id = ? AND status = 'ended'", [$evaId]) !== null);
+
+echo "Cadastro de treinador e contas\n";
+array_map('unlink', glob(BASE_PATH . '/storage/mail/*.txt') ?: []);
+$adm->post('/admin/treinadores', ['name' => 'Novo Coach', 'email' => 'nao-e-email'], '/admin/treinadores');
+check('e-mail inválido não cria', Db::one("SELECT id FROM users WHERE name = 'Novo Coach'") === null);
+[$s] = $adm->post('/admin/treinadores', ['name' => 'Novo Coach', 'email' => 'trn@example.com'], '/admin/treinadores');
+check('e-mail já usado = 422', $s === 422);
+[$s] = $adm->post('/admin/treinadores', ['name' => 'Novo Coach', 'email' => 'coach@example.com', 'role' => 'admin'], '/admin/treinadores');
+$coachId = $uid('coach@example.com');
+$roles = Db::one('SELECT GROUP_CONCAT(r.slug) s FROM user_roles ur JOIN roles r ON r.id = ur.role_id WHERE ur.user_id = ?', [$coachId])['s'];
+check('treinador criado só com perfil de treinador (ignora "role=admin")', $s === 303 && $roles === 'trainer', (string) $roles);
+[$s, $b] = $adm->req('GET', "/admin/treinadores/$coachId");
+preg_match('#/redefinir-senha/([0-9a-f]{64})#', $b, $m);
+check('admin recebe o link para o treinador criar a senha; e-mail enviado', !empty($m[1]) && count(glob(BASE_PATH . '/storage/mail/*.txt') ?: []) === 1);
+$guest = new Client();
+[$s] = $guest->post("/redefinir-senha/{$m[1]}", ['password' => 'senha-do-coach-1', 'password2' => 'senha-do-coach-1'], "/redefinir-senha/{$m[1]}");
+$coach = new Client();
+[$s2] = $coach->post('/entrar', ['email' => 'coach@example.com', 'password' => 'senha-do-coach-1']);
+check('o treinador define a senha pelo link e entra', $s === 303 && $s2 === 303 && $coach->header('Location') === '/treinador');
+
+[$s] = $adm->post("/admin/usuarios/$coachId/status", ['action' => 'block'], "/admin/treinadores/$coachId");
+[$s2] = $coach->req('GET', '/treinador');
+$again = new Client();
+[$s3] = $again->post('/entrar', ['email' => 'coach@example.com', 'password' => 'senha-do-coach-1']);
+check('bloquear: desconecta na hora e impede novo login', $s === 303 && $s2 === 303 && $s3 === 401, "$s $s2 $s3");
+$adm->post("/admin/usuarios/$coachId/status", ['action' => 'unblock'], "/admin/treinadores/$coachId");
+Db::run('DELETE FROM rate_events');
+$again2 = new Client();
+[$s] = $again2->post('/entrar', ['email' => 'coach@example.com', 'password' => 'senha-do-coach-1']);
+check('reativar: volta a entrar', $s === 303);
+[$s] = $adm->post("/admin/usuarios/$admId/status", ['action' => 'block'], '/admin');
+check('contas de administrador não podem ser bloqueadas pela tela (404)', $s === 404 && Db::one('SELECT status FROM users WHERE id = ?', [$admId])['status'] === 'active');
+[$s] = $adm->post("/admin/usuarios/$admId/senha", [], '/admin');
+check('nem recebem link de senha pela tela (404)', $s === 404);
+[$s] = $tr1->post("/admin/usuarios/$coachId/status", ['action' => 'block'], '/treinador');
+check('treinador não bloqueia contas (403)', $s === 403);
+[$s] = $adm->req('POST', "/admin/usuarios/$coachId/status", ['action' => 'block']);
+check('POST de admin sem CSRF = 419', $s === 419);
+
+echo "Relatórios e auditoria\n";
+[$s, $b] = $adm->req('GET', '/admin/relatorios');
+check('relatório por treinador e por modalidade', $s === 200 && str_contains($b, 'Adesão') && str_contains($b, 'Triathlon'));
+[$s, $b] = $adm->req('GET', '/admin/auditoria?acao=capacity_exception');
+check('auditoria filtra por ação', $s === 200 && str_contains($b, 'capacity_exception') && !str_contains($b, '<td>login_success</td>'));
+[$s, $b] = $adm->req('GET', '/admin/auditoria?dia=2000-01-01');
+check('auditoria filtra por dia', str_contains($b, '0 registro(s)'));
+[$s] = $adm->req('GET', '/admin/auditoria?pagina=999&dia=xx&acao=' . urlencode("' OR 1=1"));
+check('filtros inválidos não quebram', $s === 200);
+check('auditoria nunca guarda senhas ou links', Db::one("SELECT id FROM audit_log WHERE details LIKE '%senha-do-coach%' OR details LIKE '%redefinir-senha%'") === null);
+
 echo "\nResultado: $pass ok, $fail falha(s)\n";
 exit($fail ? 1 : 0);

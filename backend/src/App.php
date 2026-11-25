@@ -46,7 +46,8 @@ final class App
             'POST /treinador/modelos/novo' => 'Templates@create', 'GET /treinador/modelos/aplicar' => 'Templates@applyForm', 'POST /treinador/modelos/montar' => 'Templates@plan', 'POST /treinador/modelos/excluir' => 'Templates@removeWeek',
             'GET /treinador/zonas' => 'Trainer@zonesAll', 'POST /treinador/zonas' => 'Trainer@zonesAllSave', 'POST /treinador/modelos/aplicar' => 'Templates@applySave',
             'GET /treinador/treinos/novo' => 'Trainer@newForm', 'POST /treinador/treinos/novo' => 'Trainer@create',
-            'GET /admin' => 'adminHome',
+            'GET /admin' => 'Admin@home', 'GET /admin/atletas' => 'Admin@athletes', 'GET /admin/treinadores' => 'Admin@trainers',
+            'POST /admin/treinadores' => 'Admin@createTrainer', 'GET /admin/relatorios' => 'Admin@reports', 'GET /admin/auditoria' => 'Admin@audit',
             'GET /termos' => 'terms', 'GET /privacidade' => 'privacy',
         ];
         if (preg_match('#^/redefinir-senha/([0-9a-f]{64})$#', $path, $m)) {
@@ -58,6 +59,13 @@ final class App
             ['GET', '#^/app/treinos/(\d+)$#', 'Athlete@workout'],
             ['POST', '#^/app/treinos/(\d+)/registro$#', 'Athlete@logSave'],
             ['POST', '#^/treinador/disponibilidade/(\d+)/remover$#', 'TrainerPanel@availabilityRemove'],
+            ['GET', '#^/admin/atletas/(\d+)$#', 'Admin@athlete'],
+            ['POST', '#^/admin/atletas/(\d+)/vinculos$#', 'Admin@assign'],
+            ['POST', '#^/admin/atletas/(\d+)/vinculos/encerrar$#', 'Admin@unassign'],
+            ['GET', '#^/admin/treinadores/(\d+)$#', 'Admin@trainer'],
+            ['POST', '#^/admin/treinadores/(\d+)/capacidade$#', 'Admin@setCapacity'],
+            ['POST', '#^/admin/usuarios/(\d+)/status$#', 'Admin@setStatus'],
+            ['POST', '#^/admin/usuarios/(\d+)/senha$#', 'Admin@resetPassword'],
             ['GET', '#^/treinador/atletas/(\d+)$#', 'Trainer@athlete'],
             ['POST', '#^/treinador/atletas/(\d+)/zonas$#', 'Trainer@zonesSave'],
             ['POST', '#^/treinador/atletas/(\d+)/nivel$#', 'Trainer@levelSave'],
@@ -300,14 +308,6 @@ final class App
     }
 
     // ---- Áreas por perfil (esqueleto da Sprint 1; conteúdo real nas próximas sprints) ----
-
-    private static function adminHome(): never
-    {
-        $u = self::require('admin');
-        $counts = Db::all('SELECT r.name, COUNT(ur.user_id) total FROM roles r LEFT JOIN user_roles ur ON ur.role_id = r.id GROUP BY r.id, r.name ORDER BY r.id');
-        View::render('dash/area', ['title' => 'Administração', 'heading' => 'Painel administrativo', 'role' => 'Administrador', 'u' => $u,
-            'counts' => $counts, 'note' => 'Gestão de atletas, treinadores, planos e contratos será liberada nas próximas etapas.']);
-    }
 
     // ---- Páginas legais (textos ainda não aprovados) --------------------
 

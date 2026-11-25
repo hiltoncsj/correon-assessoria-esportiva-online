@@ -278,3 +278,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { box-shadow: 
 .shell__main > .grid { margin-bottom: var(--space-lg); }
 .shell__main > .grid + .tile { margin-top: 0; }
 .plain-list + p { margin-top: var(--space-md); }
+
+.tile .actions form, .actions > form { display: inline; margin: 0; }
+.notice { overflow-wrap: anywhere; }
+
+.shell__main > .tile + .grid, .shell__main > .tbl-wrap + .grid, .shell__main > .grid + h2 { margin-top: var(--space-lg); }

@@ -89,3 +89,11 @@ Substitui, no ajuste 2, o "dia fixo por sessão" e o envio direto pela tela de a
 - **Acompanhamento:** planejado × realizado, sem registro e esforço médio (1, 4 ou 12 semanas).
 - **Agenda:** treinos da semana (compromissos presenciais na Sprint 7). **Disponibilidade:** horários por dia (online/presencial), sem sobreposição; ainda sem uso em agendamento.
 - **Notificações:** "Novidades" calculadas dos registros dos atletas (30 dias), com contador desde a última visita. Sem e-mail/WhatsApp/push (decisão futura).
+
+## 2026-11-25 — Sprint 5: painel administrativo
+- **Rotas:** `/admin`, `/admin/atletas`, `/admin/treinadores`, `/admin/relatorios`, `/admin/auditoria`. Tudo exige perfil admin (verificado no servidor) e CSRF nos POST.
+- **Atribuição de treinador** pela tela, com a MESMA regra do script (`Assignment`): limite por treinador, exceção só com motivo, auditoria com o admin que fez; a linha do treinador é travada para duas atribuições simultâneas não furarem o limite.
+- **Novo treinador:** o admin informa nome e e-mail; o sistema gera link de uso único (48 h) para a pessoa criar a senha, envia por e-mail e mostra o link ao admin (o envio de e-mail na hospedagem ainda não foi confirmado). O banco guarda só o hash.
+- **Contas:** bloquear desconecta na hora (`session_version`) e impede login; reativar devolve o acesso. "Gerar link de senha" para atletas e treinadores. **Contas de administrador não são geridas pela tela** (criar/bloquear só por linha de comando), por segurança.
+- **Relatórios:** por treinador (4 semanas: atletas, publicados, realizados, sem registro, adesão) e por modalidade. **Auditoria:** filtro por ação e dia, 50 por página, somente leitura.
+- **Fora desta sprint (dependem de etapas futuras):** produtos/planos/preços, contratos, assinaturas, financeiro e inadimplência (Sprint 6); Personal Trainer e agenda presencial (Sprint 7); notícias, eventos e resultados (Sprint 8); edição de modalidades, papéis personalizados e configurações gerais (sem necessidade concreta ainda).
