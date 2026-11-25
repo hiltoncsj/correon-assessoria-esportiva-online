@@ -1,24 +1,63 @@
-// Formulário de treino: adiciona linhas e confirma ações destrutivas. Sem JS o formulário continua funcionando.
+// Formulários de treino/modelo: adiciona linhas e sessões, confirma ações destrutivas. Sem JS tudo continua funcionando.
 (function () {
-	var list = document.querySelector('[data-items]');
-	var add = document.querySelector('[data-add-row]');
-	if (list && add) {
-		add.hidden = false;
-		add.addEventListener('click', function () {
+	function reindexRows(block, sIdx) {
+		var rows = block.querySelectorAll('[data-row]');
+		rows.forEach(function (row, i) {
+			row.querySelectorAll('input, select').forEach(function (el) {
+				if (sIdx !== null) { el.name = el.name.replace(/sessions\[\d+\]/, 'sessions[' + sIdx + ']'); }
+				el.name = el.name.replace(/items\[\d+\]/, 'items[' + i + ']');
+			});
+		});
+	}
+	function clearFields(root) {
+		root.querySelectorAll('input[type=text], input:not([type]), textarea').forEach(function (el) { el.value = ''; });
+		root.querySelectorAll('select').forEach(function (el) { el.selectedIndex = 0; });
+	}
+	document.querySelectorAll('[data-add-row]').forEach(function (b) { b.hidden = false; });
+	var addSession = document.querySelector('[data-add-session]');
+	if (addSession) { addSession.hidden = false; }
+
+	document.addEventListener('change', function (e) {
+		var el = e.target;
+		if (el.matches && el.matches('input[data-athlete]') && el.checked) {
+			document.querySelectorAll('input[data-athlete="' + el.getAttribute('data-athlete') + '"]').forEach(function (o) { if (o !== el) { o.checked = false; } });
+		}
+	});
+	document.addEventListener('click', function (e) {
+		var t = e.target.closest ? e.target.closest('[data-add-row],[data-add-session],[data-confirm]') : null;
+		if (!t) { return; }
+		if (t.hasAttribute('data-confirm')) {
+			if (!window.confirm(t.getAttribute('data-confirm'))) { e.preventDefault(); }
+			return;
+		}
+		if (t.hasAttribute('data-add-row')) {
+			var block = t.closest('[data-block]');
+			var list = block.querySelector('[data-items]');
 			var rows = list.querySelectorAll('[data-row]');
 			if (rows.length >= 40) { return; }
 			var clone = rows[rows.length - 1].cloneNode(true);
-			var idx = rows.length;
-			clone.querySelectorAll('input').forEach(function (input) {
-				input.value = '';
-				input.name = input.name.replace(/items\[\d+\]/, 'items[' + idx + ']');
-			});
+			clearFields(clone);
 			list.appendChild(clone);
+			var sess = t.closest('[data-session]');
+			var sIdx = null;
+			if (sess) { var m = clone.querySelector('input').name.match(/sessions\[(\d+)\]/); sIdx = m ? m[1] : null; }
+			reindexRows(block, sIdx);
 			clone.querySelector('input').focus();
-		});
-	}
-	document.addEventListener('click', function (e) {
-		var el = e.target.closest ? e.target.closest('[data-confirm]') : null;
-		if (el && !window.confirm(el.getAttribute('data-confirm'))) { e.preventDefault(); }
+			return;
+		}
+		if (t.hasAttribute('data-add-session')) {
+			var all = document.querySelectorAll('[data-session]');
+			if (all.length >= 14) { return; }
+			var copy = all[all.length - 1].cloneNode(true);
+			clearFields(copy);
+			var idx = all.length;
+			all[all.length - 1].parentNode.insertBefore(copy, t.parentNode);
+			copy.querySelectorAll('input, select, textarea').forEach(function (el) {
+				el.name = el.name.replace(/sessions\[\d+\]/, 'sessions[' + idx + ']');
+			});
+			var title = copy.querySelector('[data-session-title]');
+			if (title) { title.textContent = 'Sessão ' + (idx + 1); }
+			copy.querySelector('input').focus();
+		}
 	});
 })();

@@ -54,6 +54,8 @@ final class App
             ['GET', '#^/app/treinos/(\d+)$#', 'Athlete@workout'],
             ['POST', '#^/app/treinos/(\d+)/registro$#', 'Athlete@logSave'],
             ['GET', '#^/treinador/atletas/(\d+)$#', 'Trainer@athlete'],
+            ['POST', '#^/treinador/atletas/(\d+)/zonas$#', 'Trainer@zonesSave'],
+            ['POST', '#^/treinador/atletas/(\d+)/nivel$#', 'Trainer@levelSave'],
             ['GET', '#^/treinador/treinos/(\d+)$#', 'Trainer@edit'],
             ['POST', '#^/treinador/treinos/(\d+)$#', 'Trainer@update'],
             ['GET', '#^/treinador/modelos/(\d+)$#', 'Templates@edit'],

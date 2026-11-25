@@ -14,10 +14,94 @@ final class Workout
     public const STATUS = ['draft' => 'Rascunho', 'published' => 'Publicado', 'cancelled' => 'Cancelado'];
     public const OUTCOMES = ['completed' => 'Realizado', 'partial' => 'Realizado em parte', 'skipped' => 'Não realizado'];
     public const MAX_ITEMS = 40;
+    public const ZONES = 7;
+    /** Percentuais padrão da FC máxima por zona (mín, máx). */
+    public const DEFAULT_ZONE_PCT = [1 => [67, 73], 2 => [73, 79], 3 => [79, 85], 4 => [85, 90], 5 => [90, 95], 6 => [95, 97], 7 => [97, 100]];
 
     public static function isStrength(string $discipline): bool
     {
         return $discipline === 'musculacao';
+    }
+
+    // ---- zonas de frequência cardíaca ----
+
+    /** @return array<int,array{min:int,max:int}> zona => faixa de bpm do atleta */
+    public static function zones(int $athleteId): array
+    {
+        $out = [];
+        foreach (Db::all('SELECT zone, bpm_min, bpm_max FROM athlete_hr_zones WHERE athlete_id = ? ORDER BY zone', [$athleteId]) as $r) {
+            $out[(int) $r['zone']] = ['min' => (int) $r['bpm_min'], 'max' => (int) $r['bpm_max']];
+        }
+        return $out;
+    }
+
+    /** FC máxima cadastrada do atleta (ou null). */
+    public static function maxHr(int $athleteId): ?int
+    {
+        $r = Db::one('SELECT max_hr FROM athlete_hr_settings WHERE athlete_id = ?', [$athleteId]);
+        return $r ? (int) $r['max_hr'] : null;
+    }
+
+    /** Faixas em bpm pelos percentuais padrão. @return array<int,array{min:int,max:int}> */
+    public static function computeZones(int $maxHr): array
+    {
+        $out = [];
+        foreach (self::DEFAULT_ZONE_PCT as $z => [$lo, $hi]) {
+            $out[$z] = ['min' => (int) round($maxHr * $lo / 100), 'max' => (int) round($maxHr * $hi / 100)];
+        }
+        return $out;
+    }
+
+    /** Zonas a exibir em um treino: as vigentes no registro (se já realizado) ou as atuais do atleta. @return array<int,array{min:int,max:int}> */
+    public static function zonesForWorkout(int $workoutId, int $athleteId): array
+    {
+        $log = self::log($workoutId);
+        if ($log && !empty($log['zones_snapshot'])) {
+            $out = [];
+            foreach ((array) json_decode((string) $log['zones_snapshot'], true) as $z => $r) {
+                if (isset($r['min'], $r['max'])) {
+                    $out[(int) $z] = ['min' => (int) $r['min'], 'max' => (int) $r['max']];
+                }
+            }
+            return $out;
+        }
+        return self::zones($athleteId);
+    }
+
+    /**
+     * Valida as zonas enviadas (min/max por zona; zonas em branco são ignoradas).
+     * @param mixed $raw $_POST['zones']
+     * @return array{0:array<int,array{min:int,max:int}>,1:string|null} [zonas, erro]
+     */
+    public static function parseZones(mixed $raw): array
+    {
+        $zones = [];
+        $prevMin = 0;
+        for ($z = 1; $z <= self::ZONES; $z++) {
+            $min = is_array($raw) && is_string($raw[$z]['min'] ?? null) ? trim($raw[$z]['min']) : '';
+            $max = is_array($raw) && is_string($raw[$z]['max'] ?? null) ? trim($raw[$z]['max']) : '';
+            if ($min === '' && $max === '') {
+                continue;
+            }
+            if (!ctype_digit($min) || !ctype_digit($max) || (int) $min < 30 || (int) $max > 230 || (int) $min >= (int) $max) {
+                return [[], "Zona $z: informe mínimo e máximo em bpm (entre 30 e 230), com o mínimo menor que o máximo."];
+            }
+            if ((int) $min < $prevMin) {
+                return [[], "Zona $z: o mínimo não pode ser menor que o da zona anterior."];
+            }
+            $prevMin = (int) $min;
+            $zones[$z] = ['min' => (int) $min, 'max' => (int) $max];
+        }
+        return [$zones, null];
+    }
+
+    /** "Z1 · 120–130 bpm" (ou "Z1 · zona não configurada"). @param array<int,array{min:int,max:int}> $zones */
+    public static function zoneLabel(?int $zone, array $zones): string
+    {
+        if ($zone === null) {
+            return '—';
+        }
+        return 'Z' . $zone . (isset($zones[$zone]) ? ' · ' . $zones[$zone]['min'] . '–' . $zones[$zone]['max'] . ' bpm' : ' · zona não configurada');
     }
 
     // ---- vínculo (autorização) ----
@@ -54,7 +138,7 @@ final class Workout
     /** @return list<array<string,mixed>> */
     public static function items(int $workoutId): array
     {
-        return Db::all('SELECT label, sets, reps, load_text, rest_seconds, duration_minutes, distance_km, target, notes
+        return Db::all('SELECT label, sets, reps, load_text, rest_seconds, duration_minutes, distance_km, target, hr_zone, notes
                         FROM workout_items WHERE workout_id = ? ORDER BY position', [$workoutId]);
     }
 
@@ -115,7 +199,7 @@ final class Workout
                 continue;
             }
             $r = [];
-            foreach (['label', 'sets', 'reps', 'load_text', 'rest_seconds', 'duration_minutes', 'distance_km', 'target', 'notes'] as $k) {
+            foreach (['label', 'sets', 'reps', 'load_text', 'rest_seconds', 'duration_minutes', 'distance_km', 'target', 'hr_zone', 'notes'] as $k) {
                 $r[$k] = is_string($row[$k] ?? null) ? trim($row[$k]) : '';
             }
             if (implode('', $r) === '') {
@@ -132,7 +216,7 @@ final class Workout
             }
             $it = ['label' => $r['label'], 'notes' => $r['notes'] === '' ? null : $r['notes'],
                 'sets' => null, 'reps' => null, 'load_text' => null, 'rest_seconds' => null,
-                'duration_minutes' => null, 'distance_km' => null, 'target' => null];
+                'duration_minutes' => null, 'distance_km' => null, 'target' => null, 'hr_zone' => null];
             if (mb_strlen($r['notes']) > 300) {
                 $errors[] = $tag . 'observação com mais de 300 caracteres.';
             }
@@ -155,6 +239,7 @@ final class Workout
                         $it['distance_km'] = $km;
                     }
                 }
+                $it['hr_zone'] = self::intField($r['hr_zone'], 1, self::ZONES, $tag . 'zona de FC entre 1 e ' . self::ZONES . '.', $errors);
                 if (mb_strlen($r['target']) > 120) {
                     $errors[] = $tag . 'alvo com mais de 120 caracteres.';
                 }
@@ -186,10 +271,10 @@ final class Workout
         Db::run('DELETE FROM workout_items WHERE workout_id = ?', [$workoutId]);
         foreach ($items as $i => $it) {
             Db::run(
-                'INSERT INTO workout_items (workout_id, position, label, sets, reps, load_text, rest_seconds, duration_minutes, distance_km, target, notes)
-                 VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+                'INSERT INTO workout_items (workout_id, position, label, sets, reps, load_text, rest_seconds, duration_minutes, distance_km, target, hr_zone, notes)
+                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
                 [$workoutId, $i + 1, $it['label'], $it['sets'], $it['reps'], $it['load_text'], $it['rest_seconds'],
-                    $it['duration_minutes'], $it['distance_km'], $it['target'], $it['notes']]
+                    $it['duration_minutes'], $it['distance_km'], $it['target'], $it['hr_zone'], $it['notes']]
             );
         }
     }

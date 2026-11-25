@@ -20,7 +20,7 @@ if (!str_ends_with((string) Correon\Env::get('DB_NAME'), '_test')) {
 $php = PHP_BINARY;
 $pdo = Db::pdo();
 $pdo->exec('SET FOREIGN_KEY_CHECKS=0');
-foreach (['workout_template_items', 'workout_templates', 'workout_log_revisions', 'workout_logs', 'workout_versions', 'workout_items', 'workouts', 'trainer_athletes', 'modalities', 'athlete_profiles', 'audit_log', 'consents', 'password_resets', 'rate_events', 'user_roles', 'users', 'schema_migrations'] as $t) {
+foreach (['workout_template_items', 'workout_template_sessions', 'workout_templates', 'athlete_hr_zones', 'athlete_hr_settings', 'workout_log_revisions', 'workout_logs', 'workout_versions', 'workout_items', 'workouts', 'trainer_athletes', 'modalities', 'athlete_profiles', 'audit_log', 'consents', 'password_resets', 'rate_events', 'user_roles', 'users', 'schema_migrations'] as $t) {
     $pdo->exec("DROP TABLE IF EXISTS $t"); // somente no banco de teste
 }
 $pdo->exec('DROP TABLE IF EXISTS roles');
@@ -495,7 +495,8 @@ echo "Auditoria do treino\n";
 check('ações de treino auditadas', (int) Db::one("SELECT COUNT(*) c FROM audit_log WHERE action IN ('workout_created','workout_published','workout_updated','workout_cancelled','workout_logged','workout_log_updated')")['c'] >= 5);
 check('histórico de versões guarda foto completa', str_contains((string) Db::one('SELECT snapshot s FROM workout_versions WHERE workout_id = ? AND version = 2', [$wid])['s'], 'Aquecimento'));
 
-echo "Modelos de treino (Treino 1, 2, 3…)\n";
+function Workout_maxhr(int $id): ?int { $r = \Correon\Db::one("SELECT max_hr m FROM athlete_hr_settings WHERE athlete_id = ?", [$id]); return $r ? (int) $r["m"] : null; }
+echo "Zonas de FC\n";
 Db::run('DELETE FROM rate_events');
 $ana = new Client(); register($ana, ['email' => 'ana@example.com', 'name' => 'Ana Corredora']);
 $anaId = $uid('ana@example.com');
@@ -503,7 +504,32 @@ $cli('assign-trainer.php', ['assign', 'trn@example.com', 'maria@example.com', 'c
 $cli('assign-trainer.php', ['assign', 'trn@example.com', 'ana@example.com', 'corrida']);
 Db::run('DELETE FROM rate_events');
 $tr1 = new Client(); $tr1->post('/entrar', ['email' => 'trn@example.com', 'password' => 'senha-staff-12345']);
+$zonesOf = static fn (int $id) => Db::all('SELECT zone, bpm_min, bpm_max FROM athlete_hr_zones WHERE athlete_id = ? ORDER BY zone', [$id]);
+$zp = static fn (array $z) => ['action' => 'save', 'zones' => array_map(static fn ($r) => ['min' => (string) $r[0], 'max' => (string) $r[1]], $z)];
+$mariaPage = "/treinador/atletas/$mariaId";
 
+$tr1->post("$mariaPage/zonas", $zp([1 => [130, 120]]), $mariaPage);
+check('zona com mínimo maior que o máximo é recusada', count($zonesOf($mariaId)) === 0);
+$tr1->post("$mariaPage/zonas", $zp([1 => [120, 300]]), $mariaPage);
+check('zona acima de 230 bpm é recusada', count($zonesOf($mariaId)) === 0);
+$tr1->post("$mariaPage/zonas", $zp([1 => [140, 150], 2 => [120, 130]]), $mariaPage);
+check('zonas fora de ordem são recusadas', count($zonesOf($mariaId)) === 0);
+$tr1->post("$mariaPage/zonas", ['action' => 'save', 'zones' => [1 => ['min' => 'abc', 'max' => '130']]], $mariaPage);
+check('zona não numérica é recusada', count($zonesOf($mariaId)) === 0);
+[$s] = $tr1->post("$mariaPage/zonas", $zp([1 => [120, 130], 2 => [131, 145], 3 => [146, 158], 4 => [159, 170], 5 => [171, 185]]), $mariaPage);
+check('treinador salva as 5 zonas da Maria', $s === 303 && count($zonesOf($mariaId)) === 5);
+[$s] = $tr1->post("/treinador/atletas/$anaId/zonas", $zp([1 => [142, 151], 2 => [152, 160]]), "/treinador/atletas/$anaId");
+check('zonas da Ana (só Z1 e Z2) — valores diferentes dos da Maria', $s === 303 && count($zonesOf($anaId)) === 2);
+[$s] = $tr2->post("/treinador/atletas/$mariaId/zonas", $zp([1 => [100, 110]]), "/treinador/atletas/$joaoId");
+check('treinador sem vínculo NÃO altera as zonas (404)', $s === 404 && $zonesOf($mariaId)[0]['bpm_min'] == 120);
+[$s] = $mar->req('POST', "/treinador/atletas/$mariaId/zonas", $zp([1 => [100, 110]]));
+check('atleta não altera as próprias zonas pelo painel do treinador (403/419)', in_array($s, [403, 419], true) && $zonesOf($mariaId)[0]['bpm_min'] == 120);
+[$s, $b] = $mar->req('GET', '/app/perfil');
+check('atleta vê suas zonas (somente leitura)', $s === 200 && str_contains($b, '120–130 bpm') && str_contains($b, '171–185 bpm'));
+check('auditoria das zonas não guarda os valores de bpm', Db::one("SELECT id FROM audit_log WHERE action = 'hr_zones_updated'") !== null
+    && Db::one("SELECT id FROM audit_log WHERE action = 'hr_zones_updated' AND details LIKE '%130%'") === null);
+
+echo "Modelos semanais (Treino 1 a 4)\n";
 [$s, $b] = $tr1->req('GET', '/treinador/modelos');
 check('biblioteca de modelos = 200 (vazia)', $s === 200 && str_contains($b, 'Nenhum modelo criado'));
 [$s] = $mar->req('GET', '/treinador/modelos');
@@ -512,102 +538,190 @@ check('atleta não acessa modelos (403)', $s === 403);
 check('modelo em modalidade sem atletas = 404', $s === 404);
 
 $tplForm = '/treinador/modelos/novo?modalidade=corrida';
-$t1 = ['modality' => 'corrida', 'name' => 'Treino 1', 'notes' => '', 'items' => [
-    ['label' => 'Aquecimento', 'duration_minutes' => '10', 'target' => 'Z1'], ['label' => 'Tiros 6x400m', 'duration_minutes' => '25', 'target' => '4:30/km']]];
-foreach (['sem nome' => ['name' => ''], 'sem linhas' => ['items' => []], 'duração inválida' => ['items' => [['label' => 'X', 'duration_minutes' => 'abc']]]] as $label => $over) {
-    [$s] = $tr1->post('/treinador/modelos/novo', $over + $t1, $tplForm);
+$sess = static fn (int $wd, string $title, array $items, array $over = []) => $over + ['weekday' => (string) $wd, 'title' => $title, 'discipline' => 'corrida', 'notes' => '', 'items' => $items];
+$iv = static fn (string $z4 = '4') => [['label' => 'Aquecimento', 'duration_minutes' => '15', 'hr_zone' => '1'], ['label' => 'Tiros 8x400m', 'duration_minutes' => '25', 'hr_zone' => $z4, 'target' => '4:30/km']];
+$longo = static fn (string $km = '12') => [['label' => 'Contínuo', 'duration_minutes' => '70', 'distance_km' => $km, 'hr_zone' => '2']];
+$T = static fn (string $name, array $sessions, array $over = []) => $over + ['modality' => 'corrida', 'name' => $name, 'level_description' => 'pace acima de 6:30/km', 'sessions' => $sessions];
+
+foreach ([
+    'nenhuma sessão' => $T('Treino X', []),
+    'sessão sem título' => $T('Treino X', [$sess(2, '', $iv())]),
+    'dia da semana inválido' => $T('Treino X', [$sess(9, 'Intervalado', $iv())]),
+    'zona de FC 8' => $T('Treino X', [$sess(2, 'Intervalado', $iv('8'))]),
+    'sessão sem linhas' => $T('Treino X', [$sess(2, 'Intervalado', [])]),
+    'modelo sem nome' => $T('', [$sess(2, 'Intervalado', $iv())]),
+] as $label => $data) {
+    [$s] = $tr1->post('/treinador/modelos/novo', $data, $tplForm);
     check("modelo rejeita: $label (422)", $s === 422, "status=$s");
 }
-[$s] = $tr1->post('/treinador/modelos/novo', $t1, $tplForm);
+[$s] = $tr1->post('/treinador/modelos/novo', $T('Treino 1', [$sess(2, 'Intervalado velocidade 1', $iv()), $sess(4, 'Intervalado velocidade 2', $iv('5')), $sess(7, 'Longo', $longo())]), $tplForm);
 $tpl1 = (int) preg_replace('#.*/#', '', (string) $tr1->header('Location'));
-check('Treino 1 criado', $s === 303 && $tpl1 > 0);
-[$s] = $tr1->post('/treinador/modelos/novo', ['name' => 'Treino 2', 'items' => [['label' => 'Longo contínuo', 'duration_minutes' => '60', 'distance_km' => '10']]] + $t1, $tplForm);
+check('Treino 1 (semana com 3 sessões) criado', $s === 303 && $tpl1 > 0 && (int) Db::one('SELECT COUNT(*) c FROM workout_template_sessions WHERE template_id = ?', [$tpl1])['c'] === 3);
+[$s] = $tr1->post('/treinador/modelos/novo', $T('Treino 2', [$sess(2, 'Intervalado', $iv()), $sess(7, 'Longo', $longo('15'))], ['level_description' => 'pace 5:30 a 6:29/km']), $tplForm);
 $tpl2 = (int) preg_replace('#.*/#', '', (string) $tr1->header('Location'));
 check('Treino 2 criado', $s === 303 && $tpl2 > 0);
+check('zona de FC gravada nas linhas do modelo', (int) Db::one('SELECT COUNT(*) c FROM workout_template_items WHERE template_id = ? AND hr_zone = 4', [$tpl1])['c'] === 1);
+[$s, $b] = $tr1->req('GET', "/treinador/modelos/$tpl1");
+check('modelo abre com as 3 sessões preenchidas', $s === 200 && str_contains($b, 'Intervalado velocidade 2') && str_contains($b, 'Longo'));
 [$s, $b] = $tr1->req('GET', '/treinador/modelos');
-check('biblioteca lista Treino 1 e Treino 2', str_contains($b, 'Treino 1') && str_contains($b, 'Treino 2'));
-
+check('biblioteca lista Treino 1 e Treino 2 com o nível', str_contains($b, '/treinador/modelos/' . $tpl1) && str_contains($b, 'pace acima de 6:30/km') && str_contains($b, 'pace 5:30 a 6:29/km'));
 [$s] = $tr2->req('GET', "/treinador/modelos/$tpl1");
 check('outro treinador NÃO abre o modelo (404)', $s === 404);
-[$s] = $tr2->post("/treinador/modelos/$tpl1", ['action' => 'archive'], "/treinador/modelos");
+[$s] = $tr2->post("/treinador/modelos/$tpl1", ['action' => 'archive'], '/treinador/modelos');
 check('outro treinador NÃO arquiva o modelo (404)', $s === 404 && Db::one('SELECT archived_at a FROM workout_templates WHERE id = ?', [$tpl1])['a'] === null);
 [$s, $b] = $tr2->req('GET', '/treinador/modelos');
 check('lista de modelos do outro treinador não mostra os meus', !str_contains($b, '/treinador/modelos/' . $tpl1));
 
+echo "Treino padrão por nível\n";
+[$s] = $tr1->post("$mariaPage/nivel", ['modality' => 'corrida', 'template_id' => (string) $tpl1], $mariaPage);
+check('treino padrão da Maria = Treino 1', $s === 303 && (int) Db::one("SELECT default_template_id d FROM trainer_athletes WHERE athlete_id = ? AND modality_id = 1 AND trainer_id = ?", [$mariaId, $uid('trn@example.com')])['d'] === $tpl1);
+$tr1->post("/treinador/atletas/$anaId/nivel", ['modality' => 'corrida', 'template_id' => (string) $tpl2], "/treinador/atletas/$anaId");
+$tr2->post('/treinador/modelos/novo', ['modality' => 'musculacao', 'name' => 'Treino A', 'level_description' => '', 'sessions' => [
+    ['weekday' => '1', 'title' => 'Peito e tríceps', 'notes' => '', 'items' => [['label' => 'Supino reto', 'sets' => '4', 'reps' => '8-10', 'load_text' => '40 kg', 'rest_seconds' => '90']]],
+    ['weekday' => '3', 'title' => 'Costas e bíceps', 'notes' => '', 'items' => [['label' => 'Remada curvada', 'sets' => '3', 'reps' => '12', 'load_text' => '30 kg', 'rest_seconds' => '60']]]]],
+    '/treinador/modelos/novo?modalidade=musculacao');
+$mtA = (int) preg_replace('#.*/#', '', (string) $tr2->header('Location'));
+check('treinador de musculação cria o modelo semanal "Treino A"', $mtA > 0);
+[$s] = $tr1->post("$mariaPage/nivel", ['modality' => 'corrida', 'template_id' => (string) $mtA], $mariaPage);
+check('treino padrão de modelo de OUTRO treinador é recusado (404)', $s === 404);
 [$s, $b] = $tr1->req('GET', '/treinador/modelos/aplicar?modalidade=corrida');
-check('tela de aplicar mostra meus atletas e modelos', $s === 200 && str_contains($b, 'Maria') && str_contains($b, 'Ana Corredora') && str_contains($b, 'Treino 1') && str_contains($b, 'Treino 2'));
-check('...e NÃO mostra atleta de outro treinador', !str_contains($b, 'João Outro'));
+check('apply: Maria já vem marcada no Treino 1 e Ana no Treino 2', str_contains($b, 'name="tpl[' . $tpl1 . '][]" value="' . $mariaId . '" data-athlete="' . $mariaId . '" checked') && str_contains($b, 'name="tpl[' . $tpl2 . '][]" value="' . $anaId . '" data-athlete="' . $anaId . '" checked') && !str_contains($b, 'name="tpl[' . $tpl2 . '][]" value="' . $mariaId . '" data-athlete="' . $mariaId . '" checked'));
+check('apply: NÃO mostra atleta de outro treinador nem alerta de zonas (todos configurados)', !str_contains($b, 'João Outro') && !str_contains($b, 'badge--off">sem zonas'));
 
-$aplicar = "/treinador/modelos/aplicar?modalidade=corrida";
-$day = date('Y-m-d', strtotime('+3 days'));
-$ap = static fn (array $over = []) => $over + ['modality' => 'corrida', 'scheduled_date' => $day, 'publish' => '1', 'pick' => [$mariaId => (string) $tpl1, $anaId => (string) $tpl2]];
-[$s] = $tr1->post('/treinador/modelos/aplicar', $ap(['scheduled_date' => 'ontem']), $aplicar);
-check('aplicar com data inválida não cria nada', (int) Db::one('SELECT COUNT(*) c FROM workouts WHERE source_template_id IS NOT NULL')['c'] === 0);
-[$s] = $tr1->post('/treinador/modelos/aplicar', $ap(['pick' => [$mariaId => '']]), $aplicar);
-check('aplicar sem escolher treino não cria nada', (int) Db::one('SELECT COUNT(*) c FROM workouts WHERE source_template_id IS NOT NULL')['c'] === 0);
-[$s] = $tr1->post('/treinador/modelos/aplicar', $ap(['pick' => [$mariaId => (string) $tpl1, $joaoId => (string) $tpl1]]), $aplicar);
-check('atleta de outro treinador na seleção: tudo recusado', (int) Db::one('SELECT COUNT(*) c FROM workouts WHERE source_template_id IS NOT NULL')['c'] === 0);
-[$s] = $tr1->post('/treinador/modelos/aplicar', $ap(['pick' => [$mariaId => (string) ($tpl2 + 9999)]]), $aplicar);
-check('modelo inexistente/alheio na seleção: recusado', (int) Db::one('SELECT COUNT(*) c FROM workouts WHERE source_template_id IS NOT NULL')['c'] === 0);
-
-[$s] = $tr1->post('/treinador/modelos/aplicar', $ap(), $aplicar);
-check('aplicar: Maria→Treino 1, Ana→Treino 2', $s === 303);
-$wm = Db::one('SELECT * FROM workouts WHERE athlete_id = ? AND source_template_id = ?', [$mariaId, $tpl1]);
-$wa = Db::one('SELECT * FROM workouts WHERE athlete_id = ? AND source_template_id = ?', [$anaId, $tpl2]);
-check('cada atleta recebeu o seu treino, publicado, na data escolhida', $wm && $wa && $wm['status'] === 'published' && $wa['scheduled_date'] === $day && $wm['title'] === 'Treino 1' && $wa['title'] === 'Treino 2');
-check('linhas copiadas do modelo', (int) Db::one('SELECT COUNT(*) c FROM workout_items WHERE workout_id = ?', [$wm['id']])['c'] === 2
-    && Db::one('SELECT distance_km d FROM workout_items WHERE workout_id = ?', [$wa['id']])['d'] === '10.00');
-check('histórico de versões criado para cada cópia', (int) Db::one('SELECT COUNT(*) c FROM workout_versions WHERE workout_id IN (?,?)', [$wm['id'], $wa['id']])['c'] === 2);
-[$s, $b] = $mar->req('GET', '/app/treinos?mes=' . substr($day, 0, 7));
-check('Maria vê o Treino 1 e não o Treino 2', str_contains($b, 'Treino 1') && !str_contains($b, 'Treino 2'));
-[$s, $b] = $ana->req('GET', '/app/treinos?mes=' . substr($day, 0, 7));
-check('Ana vê o Treino 2 e não o Treino 1', str_contains($b, 'Treino 2') && !str_contains($b, 'Treino 1'));
+echo "Aplicar a semana\n";
+$mon = date('Y-m-d', strtotime('monday last week'));
+$wed = date('Y-m-d', strtotime("$mon +2 days"));
+$aplicar = '/treinador/modelos/aplicar?modalidade=corrida';
+$ap = static fn (array $over = []) => $over + ['modality' => 'corrida', 'scheduled_date' => $wed, 'publish' => '1', 'pick' => [$mariaId => (string) $tpl1, $anaId => (string) $tpl2]];
+$count = static fn () => (int) Db::one('SELECT COUNT(*) c FROM workouts WHERE source_template_id IS NOT NULL')['c'];
+$tr1->post('/treinador/modelos/aplicar', $ap(['scheduled_date' => 'ontem']), $aplicar);
+check('semana com data inválida não cria nada', $count() === 0);
+$tr1->post('/treinador/modelos/aplicar', $ap(['pick' => [$mariaId => '']]), $aplicar);
+check('aplicar sem escolher treino não cria nada', $count() === 0);
+$tr1->post('/treinador/modelos/aplicar', $ap(['pick' => [$mariaId => (string) $tpl1, $joaoId => (string) $tpl1]]), $aplicar);
+check('atleta de outro treinador na seleção: tudo recusado', $count() === 0);
+$tr1->post('/treinador/modelos/aplicar', $ap(['pick' => [$mariaId => (string) $mtA]]), $aplicar);
+check('modelo de outro treinador na seleção: recusado', $count() === 0);
 
 [$s] = $tr1->post('/treinador/modelos/aplicar', $ap(), $aplicar);
-check('aplicar de novo (mesmo dia e modelo) não duplica', (int) Db::one('SELECT COUNT(*) c FROM workouts WHERE source_template_id IS NOT NULL')['c'] === 2);
+check('aplicar a semana: Maria→Treino 1 (3 sessões), Ana→Treino 2 (2 sessões)', $s === 303 && $count() === 5, 'criados=' . $count());
+$mw = Db::all('SELECT * FROM workouts WHERE athlete_id = ? AND source_template_id = ? ORDER BY scheduled_date', [$mariaId, $tpl1]);
+check('sessões caem nos dias certos da semana (terça, quinta e domingo)', array_column($mw, 'scheduled_date') === [date('Y-m-d', strtotime("$mon +1 day")), date('Y-m-d', strtotime("$mon +3 days")), date('Y-m-d', strtotime("$mon +6 days"))]);
+check('treinos publicados com título "modelo · sessão"', $mw[0]['status'] === 'published' && $mw[0]['title'] === 'Treino 1 · Intervalado velocidade 1');
+check('linhas e zonas copiadas (Z1 e Z4)', Db::one('SELECT GROUP_CONCAT(hr_zone ORDER BY position) z FROM workout_items WHERE workout_id = ?', [$mw[0]['id']])['z'] === '1,4');
+check('histórico de versões criado para cada cópia', (int) Db::one('SELECT COUNT(*) c FROM workout_versions v JOIN workouts w ON w.id = v.workout_id WHERE w.source_template_id IS NOT NULL')['c'] === 5);
 
-echo "Edição individual\n";
-[$s, $b] = $tr1->req('GET', "/treinador/treinos/{$wm['id']}");
-check('treino do atleta indica o modelo de origem', $s === 200 && str_contains($b, 'criado a partir do modelo') && str_contains($b, 'Treino 1'));
-$ed = ['action' => 'save', 'version' => (string) $wm['version'], 'title' => 'Treino 1 (ajustado p/ Maria)', 'scheduled_date' => $day, 'notes' => 'Menos volume nesta semana',
-    'items' => [['label' => 'Aquecimento', 'duration_minutes' => '15', 'target' => 'Z1'], ['label' => 'Tiros 4x400m', 'duration_minutes' => '20', 'target' => '4:45/km']]];
-[$s] = $tr1->post("/treinador/treinos/{$wm['id']}", $ed, "/treinador/treinos/{$wm['id']}");
-check('treinador edita o treino de UM atleta', $s === 303 && Db::one('SELECT title FROM workouts WHERE id = ?', [$wm['id']])['title'] === 'Treino 1 (ajustado p/ Maria)');
-check('o modelo original não mudou', Db::one('SELECT name FROM workout_templates WHERE id = ?', [$tpl1])['name'] === 'Treino 1'
-    && Db::one('SELECT duration_minutes d FROM workout_template_items WHERE template_id = ? AND position = 1', [$tpl1])['d'] == 10);
-$tpl1again = ['action' => 'save', 'name' => 'Treino 1', 'notes' => '', 'items' => [['label' => 'Só um bloco', 'duration_minutes' => '45']]];
-[$s] = $tr1->post("/treinador/modelos/$tpl1", $tpl1again, "/treinador/modelos/$tpl1");
-check('editar o modelo depois', $s === 303 && (int) Db::one('SELECT COUNT(*) c FROM workout_template_items WHERE template_id = ?', [$tpl1])['c'] === 1);
-check('...não altera treinos já aplicados', Db::one('SELECT title FROM workouts WHERE id = ?', [$wm['id']])['title'] === 'Treino 1 (ajustado p/ Maria)'
-    && (int) Db::one('SELECT COUNT(*) c FROM workout_items WHERE workout_id = ?', [$wm['id']])['c'] === 2);
+echo "Aplicar por treino (vários atletas em cada treino)\n";
+$tr1->post('/treinador/modelos/novo', $T('Treino 4', [$sess(3, 'Regenerativo', [['label' => 'Trote', 'duration_minutes' => '30', 'hr_zone' => '1']])], ['level_description' => 'abaixo de 4:29/km']), $tplForm);
+$tpl4 = (int) preg_replace('#.*/#', '', (string) $tr1->header('Location'));
+$mon2 = date('Y-m-d', strtotime('monday -2 weeks'));
+$grp = static fn (array $tpl, array $over = []) => $over + ['modality' => 'corrida', 'scheduled_date' => $mon2, 'publish' => '1', 'tpl' => $tpl];
+$before = $count();
+$tr1->post('/treinador/modelos/aplicar', $grp([$tpl4 => [$mariaId], $tpl1 => [$mariaId]]), $aplicar);
+check('mesmo atleta marcado em dois treinos: tudo recusado', $count() === $before);
+$tr1->post('/treinador/modelos/aplicar', $grp([$tpl4 => [$mariaId, $joaoId]]), $aplicar);
+check('atleta de outro treinador no grupo: tudo recusado', $count() === $before);
+[$s, $b] = $tr1->req('GET', '/treinador/modelos/aplicar?modalidade=corrida');
+check('tela de aplicar agrupa os atletas por treino (caixas de seleção)', str_contains($b, 'name="tpl[' . $tpl4 . '][]"') && str_contains($b, 'name="tpl[' . $tpl1 . '][]"') && str_contains($b, 'Treino 4'));
+[$s] = $tr1->post('/treinador/modelos/aplicar', $grp([$tpl4 => [$mariaId, $anaId]]), $aplicar);
+check('Treino 4 enviado para Maria e Ana de uma vez', $s === 303 && $count() === $before + 2 && (int) Db::one('SELECT COUNT(*) c FROM workouts WHERE source_template_id = ? AND scheduled_date = ?', [$tpl4, date('Y-m-d', strtotime("$mon2 +2 days"))])['c'] === 2);
 
-echo "Rascunho, arquivar e musculação\n";
-$day2 = date('Y-m-d', strtotime('+4 days'));
-[$s] = $tr1->post('/treinador/modelos/aplicar', $ap(['scheduled_date' => $day2, 'publish' => '0', 'pick' => [$anaId => (string) $tpl1]]), $aplicar);
-$wd = Db::one('SELECT * FROM workouts WHERE athlete_id = ? AND scheduled_date = ?', [$anaId, $day2]);
-check('aplicar como rascunho', $wd && $wd['status'] === 'draft');
-[$s, $b] = $ana->req('GET', '/app/treinos?mes=' . substr($day2, 0, 7));
-check('rascunho aplicado não aparece para o atleta', !str_contains($b, 'Treino 1'));
-[$s] = $tr1->post("/treinador/modelos/$tpl2", ['action' => 'archive'], "/treinador/modelos/$tpl2");
+echo "Individualização pela frequência cardíaca\n";
+[$s, $b] = $mar->req('GET', "/app/treinos/{$mw[0]['id']}");
+check('Maria vê Z1 = 120–130 bpm e Z4 = 159–170 bpm', $s === 200 && str_contains($b, 'Z1 · 120–130 bpm') && str_contains($b, 'Z4 · 159–170 bpm'));
+$aw = Db::all('SELECT * FROM workouts WHERE athlete_id = ? AND source_template_id = ? ORDER BY scheduled_date', [$anaId, $tpl2]);
+[$s, $b] = $ana->req('GET', "/app/treinos/{$aw[0]['id']}");
+check('Ana (mesmo treino) vê Z1 = 142–151 bpm', $s === 200 && str_contains($b, 'Z1 · 142–151 bpm') && !str_contains($b, '120–130'));
+check('zona sem faixa configurada avisa (Ana não tem Z4)', str_contains($b, 'Z4 · zona não configurada'));
+[$s, $b] = $mar->req('GET', '/app/treinos?mes=' . substr($mw[0]['scheduled_date'], 0, 7));
+check('Maria vê só o Treino 1 na lista', str_contains($b, 'Treino 1 · ') && !str_contains($b, 'Treino 2 · '));
+
+echo "Registro preserva as zonas vigentes\n";
+$tue = $mw[0]['scheduled_date'];
+[$s] = $mar->post("/app/treinos/{$mw[0]['id']}/registro", ['outcome' => 'completed', 'performed_on' => $tue, 'duration_minutes' => '40', 'effort' => '8'], "/app/treinos/{$mw[0]['id']}");
+check('Maria registra o treino de terça', $s === 303);
+$tr1->post("$mariaPage/zonas", $zp([1 => [125, 135], 2 => [136, 145], 3 => [146, 158], 4 => [159, 170], 5 => [171, 185]]), $mariaPage);
+[$s, $b] = $mar->req('GET', "/app/treinos/{$mw[0]['id']}");
+check('treino JÁ REALIZADO continua mostrando as zonas da época (120–130)', str_contains($b, 'Z1 · 120–130 bpm') && !str_contains($b, '125–135'));
+[$s, $b] = $mar->req('GET', "/app/treinos/{$mw[1]['id']}");
+check('treino ainda NÃO realizado já usa as zonas novas (125–135)', str_contains($b, 'Z1 · 125–135 bpm'));
+[$s, $b] = $tr1->req('GET', "/treinador/treinos/{$mw[1]['id']}");
+check('treinador vê as zonas do atleta ao editar o treino', $s === 200 && str_contains($b, 'Zonas de FC de Maria') && str_contains($b, '125–135 bpm'));
+
+echo "FC máxima e zonas padrão (7 zonas)\n";
+foreach (['abc', '99', '231'] as $bad) {
+    $tr1->post("$mariaPage/zonas", ['action' => 'defaults', 'max_hr' => $bad], $mariaPage);
+}
+check('FC máxima inválida é recusada (zonas não mudam)', count($zonesOf($mariaId)) === 5 && Workout_maxhr($mariaId) === null);
+$tr1->post("$mariaPage/zonas", ['action' => 'defaults', 'max_hr' => ''], $mariaPage);
+check('calcular pelo padrão sem FC máxima é recusado', count($zonesOf($mariaId)) === 5);
+[$s] = $tr1->post("$mariaPage/zonas", ['action' => 'defaults', 'max_hr' => '190'], $mariaPage);
+$z = array_column($zonesOf($mariaId), null, 'zone');
+check('calcular pelo padrão: 7 zonas a partir de FCmáx 190', $s === 303 && count($z) === 7);
+check('Z1 = 67–73% (127–139 bpm) e Z7 = 97–100% (184–190 bpm)', $z[1]['bpm_min'] == 127 && $z[1]['bpm_max'] == 139 && $z[7]['bpm_min'] == 184 && $z[7]['bpm_max'] == 190);
+check('Z4 = 85–90% (162–171 bpm) e Z6 = 95–97% (181–184 bpm)', $z[4]['bpm_min'] == 162 && $z[4]['bpm_max'] == 171 && $z[6]['bpm_min'] == 181 && $z[6]['bpm_max'] == 184);
+check('FC máxima do atleta fica gravada (190)', Workout_maxhr($mariaId) === 190);
+$adj = [];
+foreach ($z as $n => $r) { $adj[$n] = [(string) $r['bpm_min'], (string) $r['bpm_max']]; }
+$adj[1] = ['130', '140'];
+[$s] = $tr1->post("$mariaPage/zonas", $zp($adj), $mariaPage);
+$z2 = array_column($zonesOf($mariaId), null, 'zone');
+check('treinador ajusta só a Z1 deste atleta (130–140) e mantém as demais', $s === 303 && $z2[1]['bpm_min'] == 130 && $z2[1]['bpm_max'] == 140 && $z2[2]['bpm_min'] == $z[2]['bpm_min'] && count($z2) === 7);
+check('...e a FC máxima segue 190', Workout_maxhr($mariaId) === 190);
+[$s, $b] = $mar->req('GET', '/app/perfil');
+check('atleta vê a FC máxima e as 7 zonas (somente leitura)', str_contains($b, '190 bpm') && str_contains($b, 'Zona 7') && str_contains($b, '130–140 bpm'));
+[$s, $b] = $tr1->req('GET', $mariaPage);
+check('página do atleta mostra os percentuais padrão', str_contains($b, 'padrão 67–73% da FCmáx') && str_contains($b, 'Calcular pelo padrão'));
+check('atleta não calcula zonas (403/419)', in_array($mar->req('POST', "/treinador/atletas/$mariaId/zonas", ['action' => 'defaults', 'max_hr' => '150'])[0], [403, 419], true));
+$tr1->post("$mariaPage/zonas", $zp([1 => [125, 135], 2 => [136, 145], 3 => [146, 158], 4 => [159, 170], 5 => [171, 185]]), $mariaPage);
+
+echo "Edição individual e independência dos modelos\n";
+$longoW = $mw[2];
+$ed = ['action' => 'save', 'version' => (string) $longoW['version'], 'title' => $longoW['title'], 'scheduled_date' => $longoW['scheduled_date'], 'notes' => 'Maria: objetivo meia maratona',
+    'items' => [['label' => 'Contínuo', 'duration_minutes' => '100', 'distance_km' => '18', 'hr_zone' => '2']]];
+[$s] = $tr1->post("/treinador/treinos/{$longoW['id']}", $ed, "/treinador/treinos/{$longoW['id']}");
+check('treinador ajusta o longo SÓ da Maria (18 km)', $s === 303 && Db::one('SELECT distance_km d FROM workout_items WHERE workout_id = ?', [$longoW['id']])['d'] === '18.00');
+check('o modelo continua com 12 km', Db::one('SELECT distance_km d FROM workout_template_items WHERE template_id = ? AND distance_km IS NOT NULL', [$tpl1])['d'] === '12.00');
+check('o longo da Ana (15 km) não mudou', Db::one('SELECT i.distance_km d FROM workout_items i JOIN workouts w ON w.id = i.workout_id WHERE w.athlete_id = ? AND i.distance_km IS NOT NULL', [$anaId])['d'] === '15.00');
+$tr1->post("/treinador/modelos/$tpl1", ['action' => 'save', 'name' => 'Treino 1', 'level_description' => 'pace acima de 6:30/km', 'sessions' => [$sess(2, 'Só um dia', $iv())]], "/treinador/modelos/$tpl1");
+check('editar o modelo depois (agora 1 sessão)', (int) Db::one('SELECT COUNT(*) c FROM workout_template_sessions WHERE template_id = ?', [$tpl1])['c'] === 1);
+check('...não altera as 3 sessões já entregues à Maria', (int) Db::one('SELECT COUNT(*) c FROM workouts WHERE athlete_id = ? AND source_template_id = ?', [$mariaId, $tpl1])['c'] === 3);
+$tr1->post('/treinador/modelos/aplicar', $ap(), $aplicar);
+check('reaplicar a mesma semana não duplica as sessões já entregues', (int) Db::one('SELECT COUNT(*) c FROM workouts WHERE athlete_id = ? AND source_template_id = ?', [$anaId, $tpl2])['c'] === 2 && (int) Db::one("SELECT COUNT(*) c FROM workouts WHERE athlete_id = ? AND title = 'Treino 1 · Intervalado velocidade 1'", [$mariaId])['c'] === 1);
+
+echo "Rascunho, arquivar, musculação e triathlon\n";
+$nextMon = date('Y-m-d', strtotime('monday next week'));
+$tr1->post('/treinador/modelos/aplicar', $ap(['scheduled_date' => $nextMon, 'publish' => '0', 'pick' => [$anaId => (string) $tpl2]]), $aplicar);
+$dr = Db::all("SELECT status FROM workouts WHERE athlete_id = ? AND scheduled_date >= ? AND source_template_id = ?", [$anaId, $nextMon, $tpl2]);
+check('aplicar como rascunho cria as 2 sessões em rascunho', count($dr) === 2 && $dr[0]['status'] === 'draft');
+$draftId = (int) Db::one("SELECT id FROM workouts WHERE athlete_id = ? AND status = 'draft' LIMIT 1", [$anaId])['id'];
+[$s] = $ana->req('GET', "/app/treinos/$draftId");
+check('rascunho aplicado não abre para o atleta (404)', $s === 404);
+$tr1->post("/treinador/modelos/$tpl2", ['action' => 'archive'], "/treinador/modelos/$tpl2");
 check('arquivar modelo', Db::one('SELECT archived_at a FROM workout_templates WHERE id = ?', [$tpl2])['a'] !== null);
-[$s, $b] = $tr1->req('GET', '/treinador/modelos/aplicar?modalidade=corrida');
-check('modelo arquivado some da tela de aplicar', !str_contains($b, 'Treino 2'));
-[$s] = $tr1->post('/treinador/modelos/aplicar', $ap(['scheduled_date' => $day2, 'pick' => [$mariaId => (string) $tpl2]]), $aplicar);
-check('modelo arquivado não pode ser aplicado', (int) Db::one('SELECT COUNT(*) c FROM workouts WHERE athlete_id = ? AND scheduled_date = ?', [$mariaId, $day2])['c'] === 0);
-check('treino já aplicado do modelo arquivado continua com a Ana', Db::one('SELECT status FROM workouts WHERE id = ?', [$wa['id']])['status'] === 'published');
+check('...e o limpa como treino padrão dos atletas', Db::one('SELECT default_template_id d FROM trainer_athletes WHERE athlete_id = ? AND modality_id = 1', [$anaId])['d'] === null);
+$before = $count();
+$tr1->post('/treinador/modelos/aplicar', $ap(['scheduled_date' => $nextMon, 'pick' => [$mariaId => (string) $tpl2]]), $aplicar);
+check('modelo arquivado não pode ser aplicado', $count() === $before);
+check('treinos já entregues do modelo arquivado continuam com a Ana', Db::one("SELECT status FROM workouts WHERE athlete_id = ? AND source_template_id = ? AND status = 'published' LIMIT 1", [$anaId, $tpl2]) !== null);
 
-$mf = '/treinador/modelos/novo?modalidade=musculacao';
-[$s] = $tr2->post('/treinador/modelos/novo', ['modality' => 'musculacao', 'name' => 'Treino A', 'notes' => '', 'items' => [
-    ['label' => 'Agachamento', 'sets' => '4', 'reps' => '10', 'load_text' => '60 kg', 'rest_seconds' => '90']]], $mf);
-$mt = (int) preg_replace('#.*/#', '', (string) $tr2->header('Location'));
-check('modelo de musculação criado', $s === 303 && $mt > 0);
-$day3 = date('Y-m-d', strtotime('+5 days'));
-[$s] = $tr2->post('/treinador/modelos/aplicar', ['modality' => 'musculacao', 'scheduled_date' => $day3, 'publish' => '1', 'pick' => [$joaoId => (string) $mt]], '/treinador/modelos/aplicar?modalidade=musculacao');
-$wj = Db::one('SELECT id, discipline FROM workouts WHERE athlete_id = ? AND source_template_id = ?', [$joaoId, $mt]);
-check('modelo de musculação aplicado ao atleta', $wj && $wj['discipline'] === 'musculacao');
-[$s, $b] = $joa->req('GET', "/app/treinos/{$wj['id']}");
-check('atleta vê séries, repetições e carga copiadas', str_contains($b, 'Agachamento') && str_contains($b, '60 kg') && str_contains($b, '90 s'));
-check('aplicação auditada', (int) Db::one("SELECT COUNT(*) c FROM audit_log WHERE action = 'workout_from_template'")['c'] >= 4);
+$day = date('Y-m-d', strtotime('monday next week'));
+[$s] = $tr2->post('/treinador/modelos/aplicar', ['modality' => 'musculacao', 'scheduled_date' => $day, 'publish' => '1', 'pick' => [$joaoId => (string) $mtA]], '/treinador/modelos/aplicar?modalidade=musculacao');
+$jw = Db::all('SELECT id, discipline, scheduled_date FROM workouts WHERE athlete_id = ? AND source_template_id = ? ORDER BY scheduled_date', [$joaoId, $mtA]);
+check('semana de musculação aplicada (segunda e quarta)', count($jw) === 2 && $jw[0]['discipline'] === 'musculacao' && $jw[0]['scheduled_date'] === $day && $jw[1]['scheduled_date'] === date('Y-m-d', strtotime("$day +2 days")));
+[$s, $b] = $joa->req('GET', "/app/treinos/{$jw[1]['id']}");
+check('atleta vê exercício, séries, repetições e carga da quarta', str_contains($b, 'Remada curvada') && str_contains($b, '30 kg') && str_contains($b, '60 s'));
+
+$trForm = '/treinador/modelos/novo?modalidade=triathlon';
+[$s] = $tri->post('/treinador/modelos/novo', ['modality' => 'triathlon', 'name' => 'Treino 3', 'level_description' => '', 'sessions' => [
+    ['weekday' => '1', 'title' => 'Natação técnica', 'discipline' => 'natacao', 'notes' => '', 'items' => [['label' => '8x100m', 'duration_minutes' => '40', 'distance_km' => '1.5', 'hr_zone' => '2']]],
+    ['weekday' => '3', 'title' => 'Pedal base', 'discipline' => 'ciclismo', 'notes' => '', 'items' => [['label' => 'Z2 contínuo', 'duration_minutes' => '90', 'distance_km' => '40', 'hr_zone' => '2']]],
+    ['weekday' => '6', 'title' => 'Corrida de transição', 'discipline' => 'corrida', 'notes' => '', 'items' => [['label' => 'Brick', 'duration_minutes' => '30', 'hr_zone' => '3']]]]], $trForm);
+$tri3 = (int) preg_replace('#.*/#', '', (string) $tri->header('Location'));
+check('modelo semanal de triathlon com natação, ciclismo e corrida', $s === 303 && (int) Db::one('SELECT COUNT(DISTINCT discipline) c FROM workout_template_sessions WHERE template_id = ?', [$tri3])['c'] === 3);
+$tri->post('/treinador/modelos/aplicar', ['modality' => 'triathlon', 'scheduled_date' => $day, 'publish' => '1', 'pick' => [$joaoId => (string) $tri3]], '/treinador/modelos/aplicar?modalidade=triathlon');
+check('semana de triathlon aplicada com as 3 disciplinas', (int) Db::one("SELECT COUNT(DISTINCT discipline) c FROM workouts WHERE athlete_id = ? AND source_template_id = ?", [$joaoId, $tri3])['c'] === 3);
+check('aplicações auditadas', (int) Db::one("SELECT COUNT(*) c FROM audit_log WHERE action = 'workout_from_template'")['c'] >= 10);
 
 echo "\nResultado: $pass ok, $fail falha(s)\n";
 exit($fail ? 1 : 0);

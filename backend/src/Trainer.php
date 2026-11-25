@@ -41,10 +41,107 @@ final class Trainer
              WHERE w.athlete_id = ? AND m.slug IN ($in) ORDER BY w.scheduled_date DESC, w.id DESC LIMIT 100",
             [$athleteId, ...$mods]
         );
+        $levels = Db::all(
+            "SELECT m.slug, m.name, ta.default_template_id FROM trainer_athletes ta JOIN modalities m ON m.id = ta.modality_id
+             WHERE ta.trainer_id = ? AND ta.athlete_id = ? AND ta.status = 'active' ORDER BY m.id",
+            [$u['id'], $athleteId]
+        );
+        foreach ($levels as &$lv) {
+            $lv['templates'] = Db::all(
+                'SELECT t.id, t.name, t.level_description FROM workout_templates t JOIN modalities m ON m.id = t.modality_id
+                 WHERE t.trainer_id = ? AND m.slug = ? AND t.archived_at IS NULL ORDER BY t.name',
+                [$u['id'], $lv['slug']]
+            );
+        }
+        unset($lv);
         View::render('trainer/athlete', [
             'title' => $athlete['name'], 'shell' => 'trainer', 'active' => 'home',
             'athlete' => $athlete, 'mods' => $mods, 'workouts' => $workouts,
+            'zones' => Workout::zones($athleteId), 'maxHr' => Workout::maxHr($athleteId), 'levels' => $levels,
         ]);
+    }
+
+    /**
+     * Zonas de FC do atleta (treinador com vínculo ativo).
+     * action=defaults: calcula as 7 zonas pelos percentuais padrão a partir da FC máxima.
+     * action=save: grava as faixas digitadas (ajuste individual) e a FC máxima, se informada.
+     */
+    public static function zonesSave(int $athleteId): never
+    {
+        $u = App::require('trainer');
+        if (!Workout::linkedModalities((int) $u['id'], $athleteId)) {
+            App::notFound();
+        }
+        $back = '/treinador/atletas/' . $athleteId . '#zonas';
+        $action = Http::input('action');
+        $maxRaw = Http::input('max_hr');
+        $max = null;
+        if ($maxRaw !== '') {
+            if (!ctype_digit($maxRaw) || (int) $maxRaw < 100 || (int) $maxRaw > 230) {
+                Http::flash('err', 'FC máxima inválida (entre 100 e 230 bpm).');
+                Http::redirect($back);
+            }
+            $max = (int) $maxRaw;
+        }
+        if ($action === 'defaults') {
+            if ($max === null) {
+                Http::flash('err', 'Informe a FC máxima do atleta para calcular as zonas.');
+                Http::redirect($back);
+            }
+            $zones = Workout::computeZones($max);
+        } elseif ($action === 'save') {
+            [$zones, $err] = Workout::parseZones($_POST['zones'] ?? null);
+            if ($err !== null) {
+                Http::flash('err', $err);
+                Http::redirect($back);
+            }
+        } else {
+            App::notFound();
+        }
+        $pdo = Db::pdo();
+        $pdo->beginTransaction();
+        try {
+            Db::run('DELETE FROM athlete_hr_zones WHERE athlete_id = ?', [$athleteId]);
+            foreach ($zones as $z => $r) {
+                Db::run('INSERT INTO athlete_hr_zones (athlete_id, zone, bpm_min, bpm_max, updated_by) VALUES (?,?,?,?,?)', [$athleteId, $z, $r['min'], $r['max'], $u['id']]);
+            }
+            if ($max !== null) {
+                Db::run('INSERT INTO athlete_hr_settings (athlete_id, max_hr, updated_by) VALUES (?,?,?) ON DUPLICATE KEY UPDATE max_hr = VALUES(max_hr), updated_by = VALUES(updated_by)',
+                    [$athleteId, $max, $u['id']]);
+            }
+            $pdo->commit();
+        } catch (\Throwable $e) {
+            $pdo->rollBack();
+            throw $e;
+        }
+        Audit::log('hr_zones_updated', (int) $u['id'], 'user', $athleteId, ['zones' => count($zones), 'mode' => $action]); // sem os valores (dado pessoal)
+        Http::flash('ok', $action === 'defaults' ? 'Zonas calculadas pela FC máxima. Ajuste individualmente o que precisar.' : 'Zonas de frequência cardíaca salvas.');
+        Http::redirect($back);
+    }
+
+    /** Define o treino padrão (nível) do atleta numa modalidade. */
+    public static function levelSave(int $athleteId): never
+    {
+        $u = App::require('trainer');
+        $mod = Http::input('modality');
+        if (!in_array($mod, Workout::linkedModalities((int) $u['id'], $athleteId), true)) {
+            App::notFound();
+        }
+        $tplId = Http::input('template_id');
+        $value = null;
+        if ($tplId !== '') {
+            $row = ctype_digit($tplId) ? Db::one('SELECT id FROM workout_templates WHERE id = ? AND trainer_id = ? AND modality_id = ? AND archived_at IS NULL',
+                [(int) $tplId, $u['id'], Workout::modalityId($mod)]) : null;
+            if (!$row) {
+                App::notFound();
+            }
+            $value = (int) $row['id'];
+        }
+        Db::run('UPDATE trainer_athletes SET default_template_id = ? WHERE trainer_id = ? AND athlete_id = ? AND modality_id = ? AND status = \'active\'',
+            [$value, $u['id'], $athleteId, Workout::modalityId($mod)]);
+        Audit::log('athlete_level_set', (int) $u['id'], 'user', $athleteId, ['modality' => $mod, 'template_id' => $value]);
+        Http::flash('ok', 'Treino padrão do atleta atualizado.');
+        Http::redirect('/treinador/atletas/' . $athleteId . '#nivel');
     }
 
     public static function newForm(): never
@@ -255,6 +352,7 @@ final class Trainer
             'w' => $w, 'vals' => $vals, 'items' => $items, 'errors' => $errors,
             'disciplines' => $disciplines, 'discipline' => $discipline,
             'log' => $log, 'versions' => $w ? Workout::versions((int) $w['id']) : [],
+            'zones' => $w ? Workout::zonesForWorkout((int) $w['id'], (int) $athlete['id']) : Workout::zones((int) $athlete['id']),
             'editable' => !$w || ($w['status'] !== 'cancelled' && !$log),
         ], $status);
     }

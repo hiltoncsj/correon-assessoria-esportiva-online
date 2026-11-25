@@ -47,3 +47,14 @@ Perguntas de produto não respondidas pelo cliente; adotei estes padrões (revis
 - **Anti-duplicidade:** reaplicar o mesmo modelo ao mesmo atleta na mesma data é ignorado (e informado).
 - **Modelos não são excluídos, só arquivados** (treinos aplicados referenciam o modelo).
 - **Em aberto (perguntar ao cliente):** o modelo é uma sessão única. Se "Treino 1..4" forem semanas ou ciclos com vários dias, é preciso um modelo "multi-dia" e aplicação em calendário. Também: atleta ter um "treino padrão" persistente (nível) em vez de escolher a cada aplicação.
+
+## 2026-11-25 — Sprint 3, ajuste 2: semanas por nível, zonas de FC individuais e aplicar por treino
+- **Modelo = semana.** "Treino 1..4" são variações **por nível do atleta** (ex.: Treino 1 = pace acima de 6:30/km). Cada modelo tem várias **sessões**, cada uma em um dia da semana (ex.: 2 intervalados + 1 longo). Campo livre "nível" descreve a faixa de pace (informativo; não há classificação automática por pace).
+- **Aplicar por treino:** em `/treinador/modelos/aplicar` há um bloco por treino com a lista de atletas para marcar (Treino 1 → A, B, F, J; Treino 2 → C, D…). Um atleta só pode estar em um treino por semana (validado no servidor e na tela). Escolhe-se uma data; vale a semana de segunda a domingo. Cada sessão vira um treino do atleta no dia certo, como cópia independente.
+- **Treino padrão do atleta (nível):** definido pelo treinador na página do atleta, por modalidade; já vem marcado ao aplicar.
+- **Zonas de FC por atleta (7 zonas), definidas e ajustadas só pelo treinador.** Nos treinos o treinador escolhe a zona (Z1..Z7); cada atleta vê os bpm dele. Padrão (% da FC máxima): Z1 67–73, Z2 73–79, Z3 79–85, Z4 85–90, Z5 90–95, Z6 95–97, Z7 97–100. O treinador informa a FC máxima do atleta, usa "Calcular pelo padrão" e ajusta zona a zona (valores arredondados; fronteiras compartilham o mesmo bpm). Atleta vê as zonas em modo leitura no perfil.
+- **Histórico preservado:** ao registrar um treino, as zonas vigentes são gravadas junto (`workout_logs.zones_snapshot`); alterar as zonas depois muda só os treinos ainda não realizados.
+- **Distância do longo por atleta:** ajustada individualmente depois de aplicar (a distância depende do objetivo do atleta).
+- **Auditoria de zonas** guarda só a contagem e o modo (calculado/manual), nunca os bpm (dado pessoal).
+- **Design da área interna:** mantém as cores CorreON; botões e animações adaptam técnicas do design-system2 (brilho radial no botão, aperto no clique, cartões com reflexo e elevação, entrada com subida e atraso escalonado), só em CSS e desligadas com "reduzir movimento".
+- **Em aberto:** classificação automática do nível pelo pace de referência do atleta; semanas com repetição automática (várias semanas de uma vez); comparação de zonas por esporte (ciclismo/natação têm FC máxima própria).

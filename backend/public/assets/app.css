@@ -157,3 +157,76 @@ ul.facts { display: block; padding-left: var(--space-lg); }
 .select { min-height: 2.5rem; padding: 0 var(--space-sm); min-width: 12rem; background: var(--color-background-primary); color: var(--color-text-primary); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-sm); font: var(--text-body) / 1 var(--font-body); }
 .select:focus { border-color: var(--color-accent); }
 .tbl label { cursor: pointer; }
+
+.session { margin: 0 0 var(--space-lg); padding: var(--space-md); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-sm); min-inline-size: 0; }
+.session legend { padding: 0 var(--space-sm); font: 700 0.95rem / 1 var(--font-heading); color: var(--color-accent); text-transform: uppercase; letter-spacing: var(--letter-spacing-label); }
+.session + .session { margin-top: var(--space-md); }
+.form--inline { display: flex; flex-wrap: wrap; align-items: end; gap: var(--space-md); margin-bottom: var(--space-md); }
+.zones { display: grid; gap: var(--space-sm); }
+.zones__row { display: flex; align-items: center; gap: var(--space-sm); flex-wrap: wrap; }
+.zones__row strong { min-width: 5rem; }
+.zones__f input { width: 5rem; min-height: 2.5rem; padding: 0 var(--space-sm); background: var(--color-background-primary); color: var(--color-text-primary); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-sm); font: var(--text-body) / 1 var(--font-body); }
+.zones__f input:focus { border-color: var(--color-accent); }
+.items--endurance .items__head, .items--endurance .items__row { grid-template-columns: 2fr 1fr 1fr 0.9fr 1.3fr 1.5fr; }
+.items__row select { min-width: 0; min-height: 2.5rem; padding: 0 var(--space-xs); background: var(--color-background-primary); color: var(--color-text-primary); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-sm); font: var(--text-body) / 1 var(--font-body); }
+
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.zones__max { width: 8rem; }
+.field .zones__max { text-transform: none; }
+
+.grid--apply { margin-bottom: var(--space-lg); }
+.tplbox { margin: 0; padding: var(--space-md); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-sm); min-inline-size: 0; display: grid; gap: var(--space-sm); align-content: start; }
+.tplbox legend { padding: 0 var(--space-sm); font: 700 1rem / 1 var(--font-heading); color: var(--color-accent); text-transform: uppercase; }
+.tplbox .check { align-items: center; }
+
+/* ===== Movimento e botões da área interna =====
+   Técnicas inspiradas no design-system2 (brilho radial no botão, aperto no clique, cartões "vidro" com
+   reflexo e elevação, entrada com subida + atraso escalonado). Cores: SOMENTE os tokens CorreON. */
+.btn { position: relative; isolation: isolate; overflow: hidden; }
+.btn::after {
+	content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; opacity: 0;
+	background: radial-gradient(circle at 50% 100%, color-mix(in srgb, var(--color-accent) 55%, transparent) 0%, transparent 70%);
+}
+.btn--ghost, .btn--danger { background: color-mix(in srgb, var(--color-text-primary) 4%, transparent); backdrop-filter: blur(8px); }
+.btn:hover { border-color: color-mix(in srgb, var(--color-accent) 60%, transparent); }
+.btn--danger::after { background: radial-gradient(circle at 50% 100%, color-mix(in srgb, #ff8a8a 45%, transparent) 0%, transparent 70%); }
+.tile, .card, .tplbox, .tbl-wrap {
+	background-image: linear-gradient(180deg, color-mix(in srgb, var(--color-text-primary) 4%, transparent), transparent 40%);
+	border-top-color: color-mix(in srgb, var(--color-text-primary) 18%, transparent);
+}
+input:focus-visible, select:focus-visible, textarea:focus-visible { box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 25%, transparent); }
+
+@media (prefers-reduced-motion: no-preference) {
+	.btn { transition: background-color .3s ease, color .3s ease, border-color .3s ease, transform .3s ease, box-shadow .5s ease; box-shadow: 0 0 1rem color-mix(in srgb, var(--color-accent) 12%, transparent); }
+	.btn::after { transition: opacity .5s ease; }
+	.btn:hover { box-shadow: var(--shadow-accent-glow); }
+	.btn:hover::after { opacity: 1; }
+	.btn:active { transform: scale(.96); }
+
+	.side a { transition: border-color .3s ease, background-color .3s ease, color .3s ease, transform .3s ease; }
+	.side a:active { transform: scale(.97); }
+
+	/* Cartões do dashboard: elevação + reflexo que atravessa */
+	.grid > .tile, .grid > .tplbox, .agenda__item a { position: relative; overflow: hidden; transition: transform .5s cubic-bezier(.4, 0, .2, 1), border-color .5s ease, box-shadow .5s ease, background-color .5s ease; }
+	.grid > .tile::before, .grid > .tplbox::before {
+		content: ""; position: absolute; top: 0; left: -100%; width: 100%; height: 100%; pointer-events: none;
+		background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--color-text-primary) 6%, transparent), transparent);
+		transition: left .5s;
+	}
+	.grid > .tile:hover, .grid > .tplbox:hover { transform: translateY(-5px); border-color: color-mix(in srgb, var(--color-accent) 40%, transparent); box-shadow: 0 15px 40px color-mix(in srgb, var(--color-accent) 12%, transparent); }
+	.grid > .tile:hover::before, .grid > .tplbox:hover::before { left: 100%; transition: left .7s ease-in-out; }
+	.agenda__item a:hover { transform: translateY(-2px); box-shadow: 0 10px 30px color-mix(in srgb, var(--color-accent) 10%, transparent); }
+
+	/* Entrada: sobe 30px e aparece; blocos seguintes com atraso de 100/200/300 ms */
+	@keyframes rise { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: none; } }
+	.shell__main > *, .card { animation: rise .8s cubic-bezier(.5, 0, 0, 1) both; }
+	.shell__main > :nth-child(2) { animation-delay: 100ms; }
+	.shell__main > :nth-child(3) { animation-delay: 200ms; }
+	.shell__main > :nth-child(n+4) { animation-delay: 300ms; }
+	.grid > .tile, .grid > .tplbox { animation: rise .8s cubic-bezier(.5, 0, 0, 1) both; }
+	.grid > :nth-child(2) { animation-delay: 100ms; }
+	.grid > :nth-child(3) { animation-delay: 200ms; }
+	.grid > :nth-child(n+4) { animation-delay: 300ms; }
+}
+
+.grid > .tile, .grid > .tile + .tile { margin-top: 0; }

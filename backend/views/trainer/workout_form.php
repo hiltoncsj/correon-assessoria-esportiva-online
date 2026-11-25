@@ -17,6 +17,10 @@ $statusClass = ['draft' => 'badge--draft', 'published' => 'badge--ok', 'cancelle
 	<?php if (!empty($w['template_name'])): ?><span class="muted">· criado a partir do modelo “<?= e($w['template_name']) ?>”</span><?php endif; ?>
 </p>
 
+<?php if (!Workout::isStrength($discipline)): ?>
+	<p class="muted">Zonas de FC de <?= e($athlete['name']) ?>:
+		<?php if ($zones): foreach ($zones as $zn => $r): ?><strong>Z<?= (int) $zn ?></strong> <?= (int) $r['min'] ?>–<?= (int) $r['max'] ?> bpm &nbsp;<?php endforeach; else: ?>não configuradas — <a href="/treinador/atletas/<?= (int) $athlete['id'] ?>#zonas">configurar</a><?php endif; ?></p>
+<?php endif; ?>
 <?php if (!empty($errors)): ?><p class="notice notice--err" role="alert">Corrija os campos destacados e tente novamente.</p><?php endif; ?>
 
 <?php if (!$editable): ?>

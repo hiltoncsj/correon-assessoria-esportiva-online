@@ -4,6 +4,18 @@ $err = static fn (string $k) => !empty($errors[$k]) ? '<span class="field__err">
 <p class="eyebrow">Atleta</p>
 <h1>Meu perfil</h1>
 
+<section class="tile" aria-labelledby="h-zonas">
+	<h2 id="h-zonas">Minhas zonas de frequência cardíaca</h2>
+	<?php if (!$zones): ?>
+		<p class="muted">Seu treinador ainda não definiu suas zonas. Elas são usadas para mostrar a faixa de bpm de cada treino.</p>
+	<?php else: ?>
+		<dl class="facts">
+			<?php if (!empty($maxHr)): ?><dt>FC máxima</dt><dd><?= (int) $maxHr ?> bpm</dd><?php endif; foreach ($zones as $zn => $r): ?><dt>Zona <?= (int) $zn ?></dt><dd><?= (int) $r['min'] ?>–<?= (int) $r['max'] ?> bpm</dd><?php endforeach; ?>
+		</dl>
+		<p class="muted">Definidas pelo seu treinador.</p>
+	<?php endif; ?>
+</section>
+
 <form class="tile form" method="post" action="/app/perfil" novalidate>
 	<input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
 

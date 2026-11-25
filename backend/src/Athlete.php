@@ -101,7 +101,7 @@ final class Athlete
         $log = Workout::log($id);
         View::render('athlete/workout', [
             'title' => $w['title'], 'shell' => 'athlete', 'active' => 'treinos', 'w' => $w,
-            'items' => Workout::items($id), 'log' => $log, 'errors' => $errors,
+            'items' => Workout::items($id), 'log' => $log, 'errors' => $errors, 'zones' => Workout::zonesForWorkout($id, (int) $u['id']),
             'old' => $old ?: ($log ?: []), 'canLog' => $w['scheduled_date'] <= date('Y-m-d'),
         ], $status);
     }
@@ -168,11 +168,12 @@ final class Athlete
                 Db::run('INSERT INTO workout_log_revisions (log_id, snapshot) VALUES (?,?)', [$existing['id'], json_encode($existing, JSON_UNESCAPED_UNICODE)]);
             }
             Db::run(
-                'INSERT INTO workout_logs (workout_id, athlete_id, outcome, performed_on, duration_minutes, distance_km, effort, notes)
-                 VALUES (?,?,?,?,?,?,?,?)
+                'INSERT INTO workout_logs (workout_id, athlete_id, outcome, performed_on, duration_minutes, distance_km, effort, notes, zones_snapshot)
+                 VALUES (?,?,?,?,?,?,?,?,?)
                  ON DUPLICATE KEY UPDATE outcome=VALUES(outcome), performed_on=VALUES(performed_on), duration_minutes=VALUES(duration_minutes),
                    distance_km=VALUES(distance_km), effort=VALUES(effort), notes=VALUES(notes)',
-                [$id, $u['id'], $in['outcome'], $in['performed_on'], $dur, $dist, $eff, $in['notes'] === '' ? null : $in['notes']]
+                [$id, $u['id'], $in['outcome'], $in['performed_on'], $dur, $dist, $eff, $in['notes'] === '' ? null : $in['notes'],
+                    json_encode(Workout::zones((int) $u['id']))]
             );
             $pdo->commit();
         } catch (\Throwable $e) {
@@ -196,7 +197,7 @@ final class Athlete
         $u = App::require('athlete');
         View::render('athlete/profile', [
             'title' => 'Meu perfil', 'shell' => 'athlete', 'active' => 'perfil', 'u' => $u,
-            'old' => self::profile((int) $u['id']), 'errors' => [], 'states' => self::STATES,
+            'old' => self::profile((int) $u['id']), 'errors' => [], 'states' => self::STATES, 'zones' => Workout::zones((int) $u['id']), 'maxHr' => Workout::maxHr((int) $u['id']),
         ]);
     }
 
@@ -251,7 +252,7 @@ final class Athlete
         if ($errors) {
             View::render('athlete/profile', [
                 'title' => 'Meu perfil', 'shell' => 'athlete', 'active' => 'perfil', 'u' => $u,
-                'old' => $in, 'errors' => $errors, 'states' => self::STATES,
+                'old' => $in, 'errors' => $errors, 'states' => self::STATES, 'zones' => Workout::zones((int) $u['id']), 'maxHr' => Workout::maxHr((int) $u['id']),
             ], 422);
         }
 
