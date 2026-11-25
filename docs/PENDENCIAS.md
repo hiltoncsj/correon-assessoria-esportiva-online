@@ -65,3 +65,17 @@ Será revisado e apresentado ao fim da Sprint 9. Nada abaixo foi presumido no si
 |---|---|---|
 | F1 | **For All Sports:** documentação da API, credenciais, o que trocar | Sem informação |
 | F2 | **Plataforma multiagentes:** onde publicar, contrato de chamada, o que os agentes podem ver/fazer | Roda no seu computador |
+
+## G. Itens do escopo original ainda não construídos
+(Sprint 9 colocada em espera pelo cliente em 25/11/2026.)
+
+| # | Item | Observação |
+|---|---|---|
+| G1 | **Evolução** do atleta (gráficos de volume, adesão, esforço) | Há histórico por mês, sem tela de evolução |
+| G2 | Contratação e pagamento on-line pelo aluno | Depende de B1/B9 |
+| G3 | Páginas Resultados/Notícias/Eventos e formulário de **Contato** | Hoje só seções da Landing |
+| G4 | Links Entrar/Cadastro no site | Depende de E6 |
+| G5 | Telas de Configurações e de Permissões no admin; edição de modalidades | Perfis fixos (atleta, treinador, admin) |
+| G6 | Publicação na LocalWeb | Nada foi publicado ainda |
+| G7 | Revisão de segurança dedicada, política de retenção/exclusão de dados (LGPD) e roteiro de backup | Fariam parte da estabilização |
+| G8 | CorreON Connect (Garmin etc.) | Fora do escopo por decisão inicial |
