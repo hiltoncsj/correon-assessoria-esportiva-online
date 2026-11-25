@@ -13,6 +13,8 @@ $bar = min(100, (int) (round($capacity['pct'] / 10) * 10));
 	<p class="notice" role="status">Atenção: você já usa <?= (int) $capacity['pct'] ?>% da sua capacidade.</p>
 <?php endif; ?>
 
+<?php if ($ptPending): ?><p class="notice"><?= (int) $ptPending ?> pedido(s) de Personal aguardando. <a href="/treinador/personal">Responder</a></p><?php endif; ?>
+
 <div class="grid">
 	<section class="tile" aria-labelledby="t-cap">
 		<h2 id="t-cap">Capacidade online</h2>
@@ -20,7 +22,7 @@ $bar = min(100, (int) (round($capacity['pct'] / 10) * 10));
 		<div class="meter meter--<?= e($capacity['state']) ?>" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="<?= min(100, (int) $capacity['pct']) ?>" aria-label="Capacidade usada">
 			<span class="meter__bar meter--<?= $bar ?>"></span>
 		</div>
-		<p class="muted">Presencial (Personal Trainer): ainda não contabilizado.</p>
+		<p class="muted">Presencial (Personal Trainer): <?= (int) $presential['active'] ?> atleta(s)<?= $presential['limit'] === null ? ', sem limite definido' : ' de ' . (int) $presential['limit'] ?>.</p>
 	</section>
 
 	<section class="tile" aria-labelledby="t-sem">

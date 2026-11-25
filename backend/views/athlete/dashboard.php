@@ -25,6 +25,16 @@ $fmt = static fn (?string $d, string $f) => $d ? date($f, strtotime($d)) : '—'
 		<p><a class="btn btn--sm" href="/app/treinos">Ver todos os treinos</a></p>
 	</section>
 
+	<?php if ($appointments): ?>
+	<section class="tile" aria-labelledby="t-comp">
+		<h2 id="t-comp">Próximos compromissos</h2>
+		<ul class="plain-list">
+			<?php foreach ($appointments as $a): ?><li><?= e(\Correon\View::dateBr(substr($a['starts_at'], 0, 10))) ?> às <?= e(substr($a['starts_at'], 11, 5)) ?> — Personal com <?= e($a['trainer']) ?></li><?php endforeach; ?>
+		</ul>
+		<p><a class="btn btn--sm" href="/app/personal">Ver agenda</a></p>
+	</section>
+	<?php endif; ?>
+
 	<section class="tile" aria-labelledby="t-trn">
 		<h2 id="t-trn">Meu treinador</h2>
 		<?php if (!$trainers): ?>

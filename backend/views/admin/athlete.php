@@ -17,7 +17,7 @@
 			<?php endforeach; ?>
 		</ul>
 	<?php endif; ?>
-	<p><a class="btn btn--sm" href="/admin/atletas/<?= (int) $person['id'] ?>/contrato">Novo contrato</a></p>
+	<p class="actions"><a class="btn btn--sm" href="/admin/atletas/<?= (int) $person['id'] ?>/contrato">Novo contrato</a> <a class="btn btn--sm btn--ghost" href="/admin/atletas/<?= (int) $person['id'] ?>/personal">Novo Personal</a></p>
 </section>
 
 <section class="tile" aria-labelledby="h-vinc">

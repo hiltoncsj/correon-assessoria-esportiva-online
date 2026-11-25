@@ -3,6 +3,7 @@ $items = [
 	'inicio' => ['/admin', 'Início'],
 	'atletas' => ['/admin/atletas', 'Atletas'],
 	'treinadores' => ['/admin/treinadores', 'Treinadores'],
+	'personal' => ['/admin/personal', 'Personal'],
 	'contratos' => ['/admin/contratos', 'Contratos'],
 	'precos' => ['/admin/precos', 'Preços'],
 	'financeiro' => ['/admin/financeiro', 'Financeiro'],

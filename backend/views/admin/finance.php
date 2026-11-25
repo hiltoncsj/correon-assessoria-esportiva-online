@@ -1,4 +1,4 @@
-<?php /** @var array $totals @var array $overdue @var string $month */
+<?php /** @var array $totals @var array $overdue @var string $month @var array $personal */
 use Correon\Billing;
 ?>
 <p class="eyebrow">Administrador</p>
@@ -13,6 +13,7 @@ use Correon\Billing;
 	<section class="tile"><h2>Em atraso (total)</h2><p class="stat"><?= e(Billing::money($totals['overdue'])) ?></p></section>
 	<section class="tile"><h2>Atletas com contrato vigente</h2><p class="stat"><?= (int) $totals['athletes'] ?></p></section>
 </div>
+<p class="muted">Personal Trainer: recebido no mês <?= e(Billing::money($personal['received'])) ?> · em aberto <?= e(Billing::money($personal['open'])) ?>. Os cartões acima são só dos planos on-line.</p>
 <h2>Parcelas em atraso</h2>
 <?php if (!$overdue): ?><div class="tile"><p class="muted">Nenhuma parcela em atraso.</p></div><?php else: ?>
 	<div class="tbl-wrap">

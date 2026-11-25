@@ -45,6 +45,8 @@ final class TrainerPanel
             'title' => 'Painel do treinador', 'shell' => 'trainer', 'active' => 'inicio',
             'capacity' => Capacity::status($t), 'stats' => $stats, 'withoutWeek' => $withoutWeek, 'missing' => $missing,
             'news' => self::unseen($t), 'monday' => $monday, 'sunday' => $sunday,
+            'presential' => ['active' => Personal::activeAthletes($t), 'limit' => Personal::presentialLimit($t)],
+            'ptPending' => (int) Db::one("SELECT COUNT(*) c FROM pt_sessions WHERE trainer_id = ? AND status = 'requested'", [$t])['c'],
         ]);
     }
 
@@ -117,7 +119,13 @@ final class TrainerPanel
         foreach ($rows as $r) {
             $days[$r['scheduled_date']][] = $r;
         }
-        View::render('trainer/agenda', ['title' => 'Agenda', 'shell' => 'trainer', 'active' => 'agenda', 'days' => $days,
+        $personal = [];
+        foreach (Db::all("SELECT s.starts_at, s.status, a.name AS athlete FROM pt_sessions s JOIN users a ON a.id = s.athlete_id
+                          WHERE s.trainer_id = ? AND s.status IN ('approved','done','missed') AND s.starts_at >= ? AND s.starts_at < ? + INTERVAL 1 DAY ORDER BY s.starts_at",
+            [$t, $monday, $sunday]) as $s) {
+            $personal[substr($s['starts_at'], 0, 10)][] = $s;
+        }
+        View::render('trainer/agenda', ['personal' => $personal, 'title' => 'Agenda', 'shell' => 'trainer', 'active' => 'agenda', 'days' => $days,
             'monday' => $monday, 'sunday' => $sunday,
             'prev' => date('Y-m-d', strtotime("$monday -7 days")), 'next' => date('Y-m-d', strtotime("$monday +7 days"))]);
     }

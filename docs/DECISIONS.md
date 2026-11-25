@@ -124,3 +124,12 @@ Aplicado na Hero 6 (`src/data/plans.ts`). **Premissas a confirmar:** (1) valores
 - **Desconto por período** exibido em relação ao mensal, com 2 casas: trimestral 11,11%, semestral 22,22%, anual 33,33%.
 - Aplicado em `src/data/plans.ts` (site) e na tabela `plan_prices` (migração 0011). Contratos existentes não mudam.
 - Confirmado pelo cliente: no **combo**, o desconto exibido é em relação ao **mensal sem combo** (R$ 360/mês): mensal 15,00%, trimestral 24,44%, semestral 33,89%, anual 43,33%. Preços do combo não mudam.
+
+## 2026-11-25 — Sprint 7: Personal Trainer e agenda
+- Produto independente dos planos on-line (`pt_packages`, `pt_sessions`). Formatos: pacote, mensalidade (frequência semanal, validade obrigatória), avulsa. **Preço, duração, quantidade, validade e local são informados pelo admin** (nada presumido).
+- Fluxo: atleta pede horário → treinador confirma/recusa → treinador registra realizada/falta/cancelada. Pedido só dentro da **disponibilidade presencial** do treinador; sem sobreposição (treinador: confirmadas; atleta: pedidas e confirmadas); respeita saldo e frequência semanal.
+- **Falta/cancelamento descontar sessão:** escolha do treinador em cada caso (regra comercial não definida). Realizada sempre desconta.
+- Atleta só desiste de pedido ainda não respondido; para sessão confirmada, fala com o treinador (regra não definida). Remarcar = cancelar e pedir de novo.
+- Capacidade **presencial**: atletas distintos com Personal ativo; limite opcional por treinador; excedente só com motivo (`capacity_exceptions`).
+- Pagamento do Personal: baixa manual única por pacote; aparece separado no financeiro. A seção pública de Personal segue "Em breve" (sem preços).
+- **Em aberto:** preços/formatos oficiais, prazo de cancelamento, avisos por e-mail/WhatsApp, cobrança mensal recorrente da mensalidade.

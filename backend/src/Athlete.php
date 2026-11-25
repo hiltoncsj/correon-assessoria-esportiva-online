@@ -33,6 +33,7 @@ final class Athlete
             'u' => $u, 'meta' => $meta, 'completeness' => self::completeness($profile),
             'next' => $next, 'stats' => $stats, 'trainers' => self::trainerLinks($id),
             'modalities' => self::activeModalities($id), 'contracts' => Billing::ofAthlete($id),
+            'appointments' => Db::all("SELECT s.starts_at, t.name AS trainer FROM pt_sessions s JOIN users t ON t.id = s.trainer_id WHERE s.athlete_id = ? AND s.status = 'approved' AND s.starts_at >= NOW() ORDER BY s.starts_at LIMIT 3", [$id]),
         ]);
     }
 

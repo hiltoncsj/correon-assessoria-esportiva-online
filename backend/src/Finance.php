@@ -190,6 +190,8 @@ final class Finance
                    (SELECT COUNT(DISTINCT athlete_id) FROM contracts WHERE status = 'active' AND starts_on <= CURDATE() AND ends_on >= CURDATE()) AS athletes",
                 [$from, $to, $from, $to]
             ),
+            'personal' => Db::one("SELECT COALESCE(SUM(CASE WHEN paid_on BETWEEN ? AND ? THEN price_cents END),0) AS received,
+                    COALESCE(SUM(CASE WHEN paid_on IS NULL AND status = 'active' THEN price_cents END),0) AS open FROM pt_packages", [$from, $to]),
             'overdue' => Db::all(
                 "SELECT c.id, c.due_on, c.amount_cents, c.seq, k.id AS contract_id, a.name AS athlete, DATEDIFF(CURDATE(), c.due_on) AS days
                  FROM charges c JOIN contracts k ON k.id = c.contract_id JOIN users a ON a.id = k.athlete_id

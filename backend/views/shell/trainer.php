@@ -1,5 +1,6 @@
 <?php /** @var string $inner @var string $active */
 $unseen = \Correon\TrainerPanel::unseen((int) $user['id']);
+$ptPending = (int) \Correon\Db::one("SELECT COUNT(*) c FROM pt_sessions WHERE trainer_id = ? AND status = 'requested'", [(int) $user['id']])['c'];
 $items = [
 	'inicio' => ['/treinador', 'Início'],
 	'home' => ['/treinador/atletas', 'Meus atletas'],
@@ -8,6 +9,7 @@ $items = [
 	'zonas' => ['/treinador/zonas', 'Zonas de FC'],
 	'acompanhamento' => ['/treinador/acompanhamento', 'Acompanhamento'],
 	'agenda' => ['/treinador/agenda', 'Agenda'],
+	'personal' => ['/treinador/personal', 'Personal' . ($ptPending ? " ($ptPending)" : '')],
 	'disponibilidade' => ['/treinador/disponibilidade', 'Disponibilidade'],
 	'novidades' => ['/treinador/novidades', 'Novidades' . ($unseen ? " ($unseen)" : '')],
 ];

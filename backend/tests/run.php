@@ -20,7 +20,7 @@ if (!str_ends_with((string) Correon\Env::get('DB_NAME'), '_test')) {
 $php = PHP_BINARY;
 $pdo = Db::pdo();
 $pdo->exec('SET FOREIGN_KEY_CHECKS=0');
-foreach (['workout_template_items', 'workout_template_sessions', 'workout_templates', 'athlete_hr_zones', 'athlete_hr_settings', 'contract_events', 'charges', 'contracts', 'plan_prices', 'trainer_settings', 'capacity_exceptions', 'trainer_availability', 'workout_log_revisions', 'workout_logs', 'workout_versions', 'workout_items', 'workouts', 'trainer_athletes', 'modalities', 'athlete_profiles', 'audit_log', 'consents', 'password_resets', 'rate_events', 'user_roles', 'users', 'schema_migrations'] as $t) {
+foreach (['workout_template_items', 'workout_template_sessions', 'workout_templates', 'athlete_hr_zones', 'athlete_hr_settings', 'pt_sessions', 'pt_packages', 'contract_events', 'charges', 'contracts', 'plan_prices', 'trainer_settings', 'capacity_exceptions', 'trainer_availability', 'workout_log_revisions', 'workout_logs', 'workout_versions', 'workout_items', 'workouts', 'trainer_athletes', 'modalities', 'athlete_profiles', 'audit_log', 'consents', 'password_resets', 'rate_events', 'user_roles', 'users', 'schema_migrations'] as $t) {
     $pdo->exec("DROP TABLE IF EXISTS $t"); // somente no banco de teste
 }
 $pdo->exec('DROP TABLE IF EXISTS roles');
@@ -303,6 +303,7 @@ $ses3 = new Client();
 Db::run('DELETE FROM rate_events');
 $ses3->post('/entrar', ['email' => 'maria@example.com', 'password' => 'outra-senha-1234']);
 $ses4 = new Client();
+array_map('unlink', glob(BASE_PATH . '/storage/mail/*.txt') ?: []); // só o e-mail de redefinição
 $ses4->post('/recuperar-senha', ['email' => 'maria@example.com']);
 $mails = glob(BASE_PATH . '/storage/mail/*.txt') ?: [];
 rsort($mails);
@@ -822,7 +823,7 @@ $tid = $uid('trn@example.com');
 $activeNow = (int) Db::one("SELECT COUNT(DISTINCT athlete_id) c FROM trainer_athletes WHERE trainer_id = ? AND status = 'active'", [$tid])['c'];
 [$s, $b] = $tr1->req('GET', '/treinador');
 check('início mostra capacidade (padrão 30)', str_contains($b, '/ 30 atletas') && str_contains($b, '<p class="stat">' . $activeNow . '<small>'));
-check('presencial separado e sem número inventado', str_contains($b, 'Presencial (Personal Trainer): ainda não contabilizado'));
+check('presencial separado e sem número inventado', str_contains($b, 'Presencial (Personal Trainer): 0 atleta(s), sem limite definido'));
 
 echo "Capacidade: alerta, bloqueio e exceção\n";
 $cli('set-capacity.php', ['trn@example.com', (string) ($activeNow + 5)]);
@@ -1132,6 +1133,142 @@ check('modalidades vêm do contrato vigente', $s === 200 && str_contains($b, 'Co
 check('painel do atleta mostra assinatura e atraso reais', str_contains($b, 'parcela(s) em atraso'));
 [$s] = $jo->req('GET', "/admin/contratos/$neg");
 check('atleta não abre contrato pelo endereço do admin (403)', $s === 403);
+
+echo "Sprint 7 — Personal Trainer\n";
+Db::run('DELETE FROM rate_events');
+$adm = new Client(); $adm->post('/entrar', ['email' => 'adm@example.com', 'password' => 'senha-staff-12345']);
+$mar = new Client(); $mar->post('/entrar', ['email' => 'maria@example.com', 'password' => 'final-senha-77777']);
+$jo = new Client(); $jo->post('/entrar', ['email' => 'joao@example.com', 'password' => 'senha-forte-123']);
+$tr1 = new Client(); $tr1->post('/entrar', ['email' => 'trn@example.com', 'password' => 'senha-staff-12345']);
+$trnId = $uid('trn@example.com'); $mariaId = $uid('maria@example.com'); $joaoId = $uid('joao@example.com'); $anaId = $uid('ana@example.com');
+Db::run('DELETE FROM trainer_availability WHERE trainer_id = ?', [$trnId]);
+foreach (['/app/personal' => $mar, '/treinador/personal' => $tr1, '/admin/personal' => $adm] as $path => $who) {
+    [$s] = $who->req('GET', $path);
+    check("$path = 200 para o próprio perfil", $s === 200, "status=$s");
+}
+[$s] = $mar->req('GET', '/admin/personal');
+[$s2] = $mar->req('GET', '/treinador/personal');
+[$s3] = $tr1->req('GET', '/app/personal');
+check('perfis não acessam o Personal uns dos outros (403)', $s === 403 && $s2 === 403 && $s3 === 403);
+
+$form = ['format' => 'pacote', 'trainer_id' => (string) $trnId, 'sessions_total' => '3', 'weekly_frequency' => '', 'session_minutes' => '60', 'price' => '300,00',
+    'location' => 'Academia <b>X</b>', 'starts_on' => date('Y-m-d'), 'valid_until' => '', 'reason' => ''];
+$packs = static fn () => (int) Db::one('SELECT COUNT(*) c FROM pt_packages')['c'];
+$new = static function (int $athlete, array $data) use ($adm): array {
+    [$s] = $adm->post("/admin/atletas/$athlete/personal", $data, "/admin/atletas/$athlete/personal");
+    return [$s, (int) preg_replace('#.*/#', '', (string) $adm->header('Location'))];
+};
+foreach (['sem duração' => ['session_minutes' => ''], 'sem nº de sessões' => ['sessions_total' => ''], 'treinador inválido' => ['trainer_id' => (string) $anaId],
+    'mensalidade sem validade' => ['format' => 'mensal', 'weekly_frequency' => '2'], 'validade antes do início' => ['valid_until' => '2000-01-01'], 'valor inválido' => ['price' => 'abc']] as $label => $over) {
+    [$s] = $new($mariaId, $over + $form);
+    check("Personal recusado: $label (422)", $s === 422 && $packs() === 0, "status=$s");
+}
+[$s] = $mar->post("/admin/atletas/$mariaId/personal", $form, '/app');
+check('atleta não cria o próprio pacote (403)', $s === 403 && $packs() === 0);
+[$s, $pid] = $new($mariaId, $form);
+check('pacote de 3 sessões criado com os dados informados', $s === 303 && $pid > 0 && (int) Db::one('SELECT price_cents p FROM pt_packages WHERE id = ?', [$pid])['p'] === 30000);
+[$s, $b] = $mar->req('GET', '/app/personal');
+check('atleta vê o pacote; sem horários do treinador não há pedido', str_contains($b, 'Academia &lt;b&gt;') && str_contains($b, 'ainda não informou horários presenciais'));
+
+echo "Pedido, aprovação e saldo\n";
+$day = date('Y-m-d', strtotime('monday next week'));
+$tr1->post('/treinador/disponibilidade', ['weekday' => '1', 'start_time' => '07:00', 'end_time' => '10:00', 'mode' => 'presencial'], '/treinador/disponibilidade');
+$tr1->post('/treinador/disponibilidade', ['weekday' => '2', 'start_time' => '07:00', 'end_time' => '10:00', 'mode' => 'online'], '/treinador/disponibilidade');
+$req = static fn (Client $c, int $pkg, string $date, string $time) => $c->post('/app/personal', ['package_id' => (string) $pkg, 'date' => $date, 'time' => $time], '/app/personal');
+$n = static fn () => (int) Db::one('SELECT COUNT(*) c FROM pt_sessions')['c'];
+$req($mar, $pid, $day, '06:00');
+$req($mar, $pid, $day, '09:30');
+$req($mar, $pid, date('Y-m-d', strtotime("$day +1 day")), '08:00');
+$req($mar, $pid, date('Y-m-d', strtotime('-7 days', strtotime($day . ' -7 days'))), '08:00');
+$req($mar, $pid, $day, '99:99');
+check('recusa horário fora da disponibilidade, que só é online, no passado ou inválido', $n() === 0);
+$req($jo, $pid, $day, '07:00');
+check('outro atleta não usa meu pacote', $n() === 0);
+$req($mar, $pid, $day, '07:00');
+$sid = (int) Db::one('SELECT MAX(id) m FROM pt_sessions')['m'];
+check('pedido criado dentro da disponibilidade (aguardando)', $n() === 1 && Db::one('SELECT status s FROM pt_sessions WHERE id = ?', [$sid])['s'] === 'requested');
+$req($mar, $pid, $day, '07:30');
+check('não deixa pedir dois horários sobrepostos', $n() === 1);
+[$s, $b] = $tr1->req('GET', '/treinador/personal');
+check('treinador vê o pedido e o menu mostra o contador', str_contains($b, 'Maria Teste') && str_contains($b, 'Personal (1)'));
+$act = static fn (Client $c, int $id, array $data) => $c->post("/treinador/personal/$id", $data, '/treinador/personal');
+$tr2c = new Client(); $tr2c->post('/entrar', ['email' => 'trn2@example.com', 'password' => 'senha-staff-12345']);
+[$s] = $act($tr2c, $sid, ['action' => 'approve']);
+check('outro treinador não aprova (404)', $s === 404);
+[$s] = $mar->post("/treinador/personal/$sid", ['action' => 'approve'], '/app');
+check('atleta não aprova o próprio pedido (403)', $s === 403 && Db::one('SELECT status s FROM pt_sessions WHERE id = ?', [$sid])['s'] === 'requested');
+$act($tr1, $sid, ['action' => 'done']);
+check('não marca realizada antes de confirmar', Db::one('SELECT status s FROM pt_sessions WHERE id = ?', [$sid])['s'] === 'requested');
+$act($tr1, $sid, ['action' => 'approve']);
+check('treinador confirma', Db::one('SELECT status s FROM pt_sessions WHERE id = ?', [$sid])['s'] === 'approved');
+$act($tr1, $sid, ['action' => 'done']);
+check('não marca realizada antes da hora', Db::one('SELECT status s FROM pt_sessions WHERE id = ?', [$sid])['s'] === 'approved');
+[$s, $b] = $tr1->req('GET', "/treinador/agenda?semana=$day");
+check('agenda do treinador mostra o Personal confirmado', str_contains($b, 'Personal — Maria Teste'));
+[$s, $b] = $mar->req('GET', '/app');
+check('painel do atleta mostra o próximo compromisso', str_contains($b, 'Próximos compromissos') && str_contains($b, 'Personal com'));
+$mar->post("/app/personal/$sid/desistir", [], '/app/personal');
+check('atleta não desiste de sessão já confirmada', Db::one('SELECT status s FROM pt_sessions WHERE id = ?', [$sid])['s'] === 'approved');
+
+// sessão "aconteceu": move para o passado
+Db::run('UPDATE pt_sessions SET starts_at = NOW() - INTERVAL 2 HOUR, ends_at = NOW() - INTERVAL 1 HOUR WHERE id = ?', [$sid]);
+$act($tr1, $sid, ['action' => 'done']);
+$bal = static fn () => Correon\Personal::balance(Db::one('SELECT * FROM pt_packages WHERE id = ?', [$pid]));
+check('sessão realizada desconta do saldo (restam 2)', $bal()['used'] === 1 && $bal()['remaining'] === 2);
+
+$ask = static function (string $time) use ($mar, $req, $pid, $day): int { $req($mar, $pid, $day, $time); return (int) Db::one('SELECT MAX(id) m FROM pt_sessions')['m']; };
+$s2 = $ask('07:00');
+$s3 = $ask('08:00');
+$before = $n();
+$ask('09:00');
+check('não deixa pedir além do saldo (2 restantes, 2 já pedidas)', $n() === $before);
+$mar->post("/app/personal/$s3/desistir", [], '/app/personal');
+check('atleta desiste de pedido não respondido, sem descontar', Db::one('SELECT status s, consumes c FROM pt_sessions WHERE id = ?', [$s3])['s'] === 'cancelled' && $bal()['used'] === 1);
+$act($tr1, $s2, ['action' => 'approve']);
+$act($tr1, $s2, ['action' => 'cancel']);
+check('cancelamento sem marcar "descontar" não consome', $bal()['used'] === 1);
+$s4 = $ask('07:00');
+$act($tr1, $s4, ['action' => 'approve']);
+$act($tr1, $s4, ['action' => 'cancel', 'consumes' => '1', 'note' => 'avisou em cima da hora']);
+check('cancelamento marcado como "descontar" consome', $bal()['used'] === 2 && $bal()['remaining'] === 1);
+$s5 = $ask('08:00');
+$act($tr1, $s5, ['action' => 'refuse', 'note' => 'sem vaga']);
+check('recusar não consome e mantém o histórico', Db::one('SELECT status s FROM pt_sessions WHERE id = ?', [$s5])['s'] === 'refused' && $bal()['used'] === 2);
+
+echo "Conflito de agenda, mensalidade e capacidade presencial\n";
+[$s, $jp] = $new($joaoId, ['format' => 'mensal', 'sessions_total' => '', 'weekly_frequency' => '1', 'price' => '', 'valid_until' => date('Y-m-d', strtotime('+60 days'))] + $form);
+check('mensalidade criada (1x por semana, sem valor)', $s === 303 && $jp > 0);
+$s6 = $ask('09:00');
+$req($jo, $jp, $day, '09:00');
+$j1 = (int) Db::one('SELECT MAX(id) m FROM pt_sessions WHERE athlete_id = ?', [$joaoId])['m'];
+$act($tr1, $s6, ['action' => 'approve']);
+$act($tr1, $j1, ['action' => 'approve']);
+check('treinador não confirma dois alunos no mesmo horário', Db::one('SELECT status s FROM pt_sessions WHERE id = ?', [$j1])['s'] === 'requested');
+$jo->post("/app/personal/$j1/desistir", [], '/app/personal');
+$req($jo, $jp, $day, '07:00');
+$before = $n();
+$req($jo, $jp, $day, '08:00');
+check('mensalidade respeita a frequência semanal', $n() === $before);
+$adm->post("/admin/treinadores/$trnId/capacidade", ['online_limit' => '30', 'presencial_limit' => '2'], "/admin/treinadores/$trnId");
+[$s] = $new($anaId, $form);
+check('limite presencial atingido bloqueia novo aluno', $s === 422);
+[$s, $ap] = $new($anaId, ['reason' => 'autorizado'] + $form);
+check('com motivo: exceção registrada', $s === 303 && Db::one("SELECT id FROM capacity_exceptions WHERE athlete_id = ? AND reason LIKE 'Presencial:%'", [$anaId]) !== null);
+[$s, $b] = $tr1->req('GET', '/treinador');
+check('painel do treinador conta o presencial', str_contains($b, 'Presencial (Personal Trainer): 3 atleta(s) de 2'));
+
+echo "Pagamento e cancelamento do pacote\n";
+$adm->post("/admin/personal/$pid/pagar", ['paid_on' => date('Y-m-d'), 'method' => 'pix'], "/admin/personal/$pid");
+check('baixa do Personal registrada', Db::one('SELECT paid_on p FROM pt_packages WHERE id = ?', [$pid])['p'] === date('Y-m-d'));
+[$s, $b] = $adm->req('GET', '/admin/financeiro');
+check('financeiro mostra o Personal separado', str_contains($b, 'Personal Trainer: recebido no mês R$ 300,00'));
+$adm->post("/admin/personal/$pid/cancelar", ['reason' => 'mudança'], "/admin/personal/$pid");
+check('cancelar pacote cancela sessões futuras sem descontar', Db::one('SELECT status s FROM pt_packages WHERE id = ?', [$pid])['s'] === 'cancelled'
+    && Db::one('SELECT status s, consumes c FROM pt_sessions WHERE id = ?', [$s6])['s'] === 'cancelled' && $bal()['used'] === 2);
+$before = $n();
+$ask('08:00');
+check('pacote cancelado não aceita pedidos', $n() === $before);
+check('ações do Personal auditadas', (int) Db::one("SELECT COUNT(*) c FROM audit_log WHERE action LIKE 'pt\\_%'")['c'] >= 10);
 
 echo "\nResultado: $pass ok, $fail falha(s)\n";
 exit($fail ? 1 : 0);

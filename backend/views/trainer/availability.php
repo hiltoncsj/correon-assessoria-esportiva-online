@@ -4,7 +4,7 @@ $modes = ['online' => 'Online', 'presencial' => 'Presencial'];
 ?>
 <p class="eyebrow">Treinador</p>
 <h1>Disponibilidade</h1>
-<p class="muted">Seus horários na semana. Eles serão usados no agendamento do Personal Trainer; por enquanto servem só como registro.</p>
+<p class="muted">Seus horários na semana. Os horários <strong>presenciais</strong> são os que os alunos de Personal podem pedir.</p>
 
 <form class="tile form" method="post" action="/treinador/disponibilidade" novalidate>
 	<input type="hidden" name="_csrf" value="<?= e($csrf) ?>">

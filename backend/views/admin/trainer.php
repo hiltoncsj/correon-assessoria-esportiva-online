@@ -13,7 +13,7 @@ use Correon\Templates;
 		<label class="field">Limite presencial (opcional)<input type="text" inputmode="numeric" name="presencial_limit" value="<?= $presencial === null ? '' : (int) $presencial ?>" maxlength="4" class="zones__max"></label>
 		<button class="btn btn--sm" type="submit">Salvar</button>
 	</form>
-	<p class="muted">O limite presencial só passa a ser contado com o Personal Trainer.</p>
+	<p class="muted">Presencial: <?= (int) \Correon\Personal::activeAthletes((int) $person['id']) ?> atleta(s) com Personal ativo. Limite vazio = sem limite.</p>
 </section>
 
 <section class="tile" aria-labelledby="h-atl">

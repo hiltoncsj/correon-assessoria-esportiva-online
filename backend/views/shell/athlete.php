@@ -5,6 +5,7 @@ $items = [
 	'modalidades' => ['/app/modalidades', 'Minhas modalidades'],
 	'treinos' => ['/app/treinos', 'Meus treinos'],
 	'treinador' => ['/app/treinador', 'Meu treinador'],
+	'personal' => ['/app/personal', 'Personal Trainer'],
 	'assinaturas' => ['/app/assinaturas', 'Assinaturas'],
 	'senha' => ['/app/senha', 'Alterar senha'],
 ];

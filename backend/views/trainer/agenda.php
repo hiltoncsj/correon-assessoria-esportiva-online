@@ -12,8 +12,13 @@ $fmt = static fn (string $d) => date('d/m', strtotime($d));
 <?php foreach ($days as $date => $list): ?>
 	<section class="tile" aria-label="<?= e(\Correon\View::dateBr($date)) ?>">
 		<h2><?= e(\Correon\View::dateBr($date)) ?></h2>
+		<?php if (!empty($personal[$date])): ?>
+			<ul class="plain-list">
+				<?php foreach ($personal[$date] as $s): ?><li><a href="/treinador/personal"><strong><?= e(substr($s['starts_at'], 11, 5)) ?></strong> Personal — <?= e($s['athlete']) ?></a> <span class="badge badge--ok"><?= e(\Correon\Personal::STATUS[$s['status']]) ?></span></li><?php endforeach; ?>
+			</ul>
+		<?php endif; ?>
 		<?php if (!$list): ?>
-			<p class="muted">Sem treinos.</p>
+			<p class="muted">Sem treinos prescritos.</p>
 		<?php else: ?>
 			<ul class="plain-list">
 				<?php foreach ($list as $w): ?>
@@ -27,4 +32,4 @@ $fmt = static fn (string $d) => date('d/m', strtotime($d));
 		<?php endif; ?>
 	</section>
 <?php endforeach; ?>
-<p class="muted">Compromissos presenciais (Personal Trainer) entrarão na agenda em uma próxima etapa.</p>
+
