@@ -298,6 +298,9 @@ final class Trainer
             throw $e;
         }
         Audit::log($action === 'publish' ? 'workout_published' : 'workout_created', (int) $u['id'], 'workout', $id, ['athlete_id' => $athleteId]);
+        if ($action === 'publish') {
+            Notify::send($athleteId, 'Novo treino publicado', $data['title'] . ' — ' . date('d/m', strtotime($data['scheduled_date'])), '/app/treinos/' . $id);
+        }
         Http::flash('ok', $action === 'publish' ? 'Treino publicado para o atleta.' : 'Rascunho salvo.');
         Http::redirect('/treinador/treinos/' . $id);
     }
@@ -384,6 +387,9 @@ final class Trainer
             throw $e;
         }
         Audit::log('workout_' . $note, (int) $u['id'], 'workout', $id, ['athlete_id' => (int) $w['athlete_id']]);
+        if ($status === 'published') {
+            Notify::send((int) $w['athlete_id'], $note === 'published' ? 'Novo treino publicado' : 'Treino atualizado', $data['title'] . ' — ' . date('d/m', strtotime($data['scheduled_date'])), '/app/treinos/' . $id);
+        }
         Http::flash('ok', ['updated' => 'Treino salvo.', 'published' => 'Treino publicado para o atleta.',
             'unpublished' => 'Treino voltou a rascunho (o atleta não o vê).', 'cancelled' => 'Treino cancelado.'][$note]);
         Http::redirect('/treinador/treinos/' . $id);

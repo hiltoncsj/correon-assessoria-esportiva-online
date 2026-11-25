@@ -133,3 +133,10 @@ Aplicado na Hero 6 (`src/data/plans.ts`). **Premissas a confirmar:** (1) valores
 - Capacidade **presencial**: atletas distintos com Personal ativo; limite opcional por treinador; excedente só com motivo (`capacity_exceptions`).
 - Pagamento do Personal: baixa manual única por pacote; aparece separado no financeiro. A seção pública de Personal segue "Em breve" (sem preços).
 - **Em aberto:** preços/formatos oficiais, prazo de cancelamento, avisos por e-mail/WhatsApp, cobrança mensal recorrente da mensalidade.
+
+## 2026-11-25 — Sprint 8: conteúdo, consentimento e avisos
+- **Hero 7 dinâmica:** o admin publica em `/admin/conteudo`; a página busca `/api/v1/public/comunidade` (pública, somente leitura, sem cookies, só campos exibidos) e mantém o conteúdo do build se a API falhar. `src/data/comunidade.ts` continua como reserva (vazio). Inserção sem `innerHTML`.
+- **Consentimento:** atleta cadastrado só é publicado com autorização ativa dele (`/app/privacidade`); retirada tira do ar na hora (a foto tem cache de até 5 min). Resultado de não cadastrado e qualquer foto exigem declaração do admin.
+- **Agendamento** por data/hora (sem cron). Nada é excluído: arquiva-se.
+- **Fotos:** só JPG/PNG/WebP até 4 MB; regravadas e reduzidas (1280px), sem metadados; guardadas fora da pasta pública e servidas só se o conteúdo estiver visível.
+- **Avisos** na plataforma: treino publicado/atualizado, semana enviada, resposta de Personal e comunicados do admin (todos ou por modalidade). Sem e-mail/WhatsApp.

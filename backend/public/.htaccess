@@ -10,7 +10,7 @@ DirectoryIndex index.html
 	# RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 
 	# Rotas da aplicação PHP (a Landing continua estática)
-	RewriteRule ^(entrar|cadastro|recuperar-senha|redefinir-senha|sair|app|treinador|admin|termos|privacidade)(/.*)?$ app.php [L,QSA]
+	RewriteRule ^(api|entrar|cadastro|recuperar-senha|redefinir-senha|sair|app|treinador|admin|termos|privacidade)(/.*)?$ app.php [L,QSA]
 </IfModule>
 
 # Nunca servir arquivos ocultos ou de configuração

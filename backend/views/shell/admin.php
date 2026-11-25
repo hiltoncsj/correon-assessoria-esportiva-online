@@ -7,6 +7,8 @@ $items = [
 	'contratos' => ['/admin/contratos', 'Contratos'],
 	'precos' => ['/admin/precos', 'Preços'],
 	'financeiro' => ['/admin/financeiro', 'Financeiro'],
+	'conteudo' => ['/admin/conteudo', 'Conteúdo'],
+	'comunicados' => ['/admin/comunicados', 'Comunicados'],
 	'relatorios' => ['/admin/relatorios', 'Relatórios'],
 	'auditoria' => ['/admin/auditoria', 'Auditoria'],
 ];

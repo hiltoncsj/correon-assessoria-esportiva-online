@@ -236,6 +236,10 @@ final class Personal
             throw $e;
         }
         Audit::log('pt_' . $status, $trainerId, 'pt_session', $sessionId, ['consumes' => $use]);
+        if (in_array($status, ['approved', 'refused', 'cancelled'], true)) {
+            Notify::send((int) $s['athlete_id'], 'Personal: sessão ' . ['approved' => 'confirmada', 'refused' => 'recusada', 'cancelled' => 'cancelada'][$status],
+                date('d/m \à\s H:i', strtotime($s['starts_at'])) . (trim($note) !== '' ? ' — ' . trim($note) : ''), '/app/personal');
+        }
         return null;
     }
 

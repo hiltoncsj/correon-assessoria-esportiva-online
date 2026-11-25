@@ -291,3 +291,11 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { box-shadow: 
 .done-list .form--inline .select { min-width: 9rem; }
 
 .done-list.tile { padding: var(--space-md) var(--space-lg); }
+
+.preview { max-width: 20rem; height: auto; border-radius: var(--radius-sm); border: 1px solid var(--color-border-subtle); }
+input[type=file] { color: var(--color-text-secondary); }
+
+.form, .field { min-width: 0; }
+.form { grid-template-columns: minmax(0, 1fr); }
+.field input, .field select, .field textarea { width: 100%; min-width: 0; max-width: 100%; }
+.field input[type="file"] { padding-block: var(--space-xs); }

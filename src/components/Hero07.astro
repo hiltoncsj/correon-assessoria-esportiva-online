@@ -630,6 +630,99 @@ const tabs = [
 		mq.addEventListener('change', apply);
 		apply();
 
+		// Conteúdo cadastrado pelo administrador (API pública). Sem resposta, fica o conteúdo do build.
+		// Tudo é inserido com textContent/atributos (nada de HTML vindo do servidor).
+		type Item = Record<string, string | null>;
+		const scope = root.getAttributeNames().find((a) => a.startsWith('data-astro-cid'));
+		const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string | null) => {
+			const node = document.createElement(tag);
+			if (cls) node.className = cls;
+			if (text) node.textContent = text;
+			if (scope) node.setAttribute(scope, '');
+			return node;
+		};
+		const safeUrl = (u?: string | null) => (u && (/^https?:\/\//i.test(u) || u.startsWith('/api/')) ? u : null);
+		const fmt = (iso: string) =>
+			new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' }).format(new Date(iso));
+		const statusText: Record<string, string> = { proximo: 'Próximo', andamento: 'Em andamento', realizado: 'Realizado' };
+		const link = (href: string | null | undefined, label: string) => {
+			const url = safeUrl(href);
+			if (!url) return null;
+			const a = el('a', 'card__link', label);
+			a.href = url;
+			return a;
+		};
+		const card = (i: Item, kind: string, featured: boolean) => {
+			const li = el('li', featured ? 'card card--featured' : 'card');
+			const src = safeUrl(i.image);
+			if (src) {
+				const img = el('img', 'card__img');
+				img.src = src;
+				img.alt = i.imageAlt ?? '';
+				img.decoding = 'async';
+				li.append(img);
+			}
+			const body = el('div', 'card__body');
+			const meta = el('p', 'card__meta');
+			if (kind === 'events') meta.append(el('span', 'card__status', statusText[i.status ?? 'proximo']), ' ', i.modality ?? '');
+			else meta.textContent = `${(kind === 'news' ? i.category : i.modality) ?? ''} · ${fmt(i.date!)}`;
+			body.append(meta, el('h3', 'card__title', kind === 'results' ? i.athlete : kind === 'news' ? i.title : i.name));
+			if (kind === 'results') {
+				body.append(el('p', 'card__sub', [i.competition, i.distance].filter(Boolean).join(' · ')), el('p', 'card__result', i.result));
+				if (i.placement) body.append(el('p', 'card__sub', i.placement));
+				if (i.text) body.append(el('p', 'card__text', i.text));
+				const a = link(i.href, 'Ver conquista');
+				if (a) body.append(a);
+			} else if (kind === 'news') {
+				body.append(el('p', 'card__text', i.summary));
+				const a = link(i.href, 'Ler notícia');
+				if (a) body.append(a);
+			} else {
+				body.append(el('p', 'card__sub', [fmt(i.date!), i.time, i.place].filter(Boolean).join(' · ')));
+				if (i.description) body.append(el('p', 'card__text', i.description));
+				const actions = el('div', 'card__actions');
+				const reg = i.status !== 'realizado' ? link(i.registrationHref, 'Inscrever-se') : null;
+				const det = link(i.href, 'Ver evento');
+				if (reg) actions.append(reg);
+				if (det) actions.append(det);
+				body.append(actions);
+			}
+			li.append(body);
+			return li;
+		};
+		const list = (items: Item[], kind: string, featureFirst: boolean) => {
+			const ul = el('ul', 'cards');
+			items.forEach((i, k) => ul.append(card(i, kind, featureFirst && k === 0)));
+			return ul;
+		};
+		const fill = (kind: string, panel: string, items: Item[]) => {
+			const box = root.querySelector(`#comm-panel-${panel} .comm__content`);
+			if (!box || !items.length) return;
+			if (kind !== 'events') return box.replaceChildren(list(items, kind, true));
+			const wrap = el('div', 'agenda');
+			const groups: [string, Item[]][] = [
+				['Próximos eventos', items.filter((e) => e.status !== 'realizado').sort((a, b) => a.date!.localeCompare(b.date!))],
+				['Eventos realizados', items.filter((e) => e.status === 'realizado')],
+			];
+			groups.forEach(([heading, group], g) => {
+				if (!group.length) return;
+				const section = el('section', 'agenda__group');
+				section.setAttribute('aria-label', heading);
+				section.append(el('h3', 'agenda__heading', heading), list(group, kind, g === 0));
+				wrap.append(section);
+			});
+			box.replaceChildren(wrap);
+		};
+		fetch('/api/v1/public/comunidade', { headers: { Accept: 'application/json' } })
+			.then((r) => (r.ok ? r.json() : Promise.reject()))
+			.then((data: { results?: Item[]; news?: Item[]; events?: Item[] }) => {
+				fill('results', 'resultados', data.results ?? []);
+				fill('news', 'noticias', data.news ?? []);
+				fill('events', 'eventos', data.events ?? []);
+				if (scrollMode) update();
+			})
+			.catch(() => {});
+
 		tabs.forEach((t, i) => {
 			t.addEventListener('click', () => goTo(i));
 			t.addEventListener('keydown', (e) => {

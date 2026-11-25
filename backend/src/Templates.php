@@ -315,6 +315,7 @@ final class Templates
 
         $created = 0;
         $skipped = [];
+        $notified = [];
         $sunday = (new \DateTimeImmutable($monday))->modify('+6 days')->format('Y-m-d');
         $pdo = Db::pdo();
         $pdo->beginTransaction();
@@ -348,6 +349,7 @@ final class Templates
                         Workout::snapshot($wid, $status === 'published' ? 'published' : 'created', $t);
                         Audit::log('workout_from_template', $t, 'workout', $wid, ['athlete_id' => $athleteId, 'template_id' => (int) $tpl['id']]);
                         $created++;
+                        $notified[$athleteId] = true;
                     }
                 }
                 // Lembra os dias do atleta, se ainda não houver nenhum cadastrado.
@@ -358,6 +360,11 @@ final class Templates
         } catch (\Throwable $e) {
             $pdo->rollBack();
             throw $e;
+        }
+        if ($status === 'published') { // um aviso por atleta, depois de gravar tudo
+            foreach (array_keys($notified) as $athleteId) {
+                Notify::send((int) $athleteId, 'Sua semana de treinos está disponível', 'Semana de ' . date('d/m', strtotime($monday)), '/app/treinos?mes=' . substr($monday, 0, 7));
+            }
         }
         $msg = $created . ' treino(s) ' . ($status === 'published' ? 'publicado(s)' : 'salvo(s) como rascunho') . ' na semana de ' . date('d/m/Y', strtotime($monday)) . '.';
         if ($skipped) {

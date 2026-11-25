@@ -9,11 +9,14 @@ final class App
 
     public static function run(): void
     {
-        Http::secureHeaders();
-        Http::startSession();
-
         $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
         $path = rtrim((string) parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH), '/') ?: '/';
+        if (str_starts_with($path, '/api/')) {
+            Api::handle($method, $path); // público, sem sessão nem cookies
+        }
+
+        Http::secureHeaders();
+        Http::startSession();
 
         try {
             if ($method === 'POST' && !Http::checkCsrf()) {
@@ -47,7 +50,9 @@ final class App
             'POST /treinador/modelos/novo' => 'Templates@create', 'GET /treinador/modelos/aplicar' => 'Templates@applyForm', 'POST /treinador/modelos/montar' => 'Templates@plan', 'POST /treinador/modelos/excluir' => 'Templates@removeWeek',
             'GET /treinador/zonas' => 'Trainer@zonesAll', 'POST /treinador/zonas' => 'Trainer@zonesAllSave', 'POST /treinador/modelos/aplicar' => 'Templates@applySave',
             'GET /treinador/treinos/novo' => 'Trainer@newForm', 'POST /treinador/treinos/novo' => 'Trainer@create',
-            'GET /admin' => 'Admin@home', 'GET /admin/precos' => 'Finance@prices', 'POST /admin/precos' => 'Finance@savePrices',
+            'GET /admin' => 'Admin@home', 'GET /admin/conteudo' => 'ContentPages@index', 'GET /admin/conteudo/novo' => 'ContentPages@newForm',
+            'POST /admin/conteudo' => 'ContentPages@create', 'GET /admin/comunicados' => 'ContentPages@announcements', 'POST /admin/comunicados' => 'ContentPages@announce',
+            'GET /app/avisos' => 'ContentPages@notices', 'GET /app/privacidade' => 'ContentPages@privacy', 'POST /app/privacidade' => 'ContentPages@savePrivacy', 'GET /admin/precos' => 'Finance@prices', 'POST /admin/precos' => 'Finance@savePrices',
             'GET /admin/contratos' => 'Finance@contracts', 'GET /admin/financeiro' => 'Finance@overview', 'GET /admin/atletas' => 'Admin@athletes', 'GET /admin/treinadores' => 'Admin@trainers',
             'POST /admin/treinadores' => 'Admin@createTrainer', 'GET /admin/relatorios' => 'Admin@reports', 'GET /admin/auditoria' => 'Admin@audit',
             'GET /termos' => 'terms', 'GET /privacidade' => 'privacy',
@@ -76,6 +81,9 @@ final class App
             ['GET', '#^/admin/personal/(\d+)$#', 'PersonalPages@adminPackage'],
             ['POST', '#^/admin/personal/(\d+)/cancelar$#', 'PersonalPages@adminCancel'],
             ['POST', '#^/admin/personal/(\d+)/pagar$#', 'PersonalPages@adminPay'],
+            ['GET', '#^/admin/conteudo/(\d+)$#', 'ContentPages@edit'],
+            ['POST', '#^/admin/conteudo/(\d+)$#', 'ContentPages@update'],
+            ['GET', '#^/admin/imagem/(\d+)$#', 'ContentPages@adminImage'],
             ['GET', '#^/admin/atletas/(\d+)$#', 'Admin@athlete'],
             ['POST', '#^/admin/atletas/(\d+)/vinculos$#', 'Admin@assign'],
             ['POST', '#^/admin/atletas/(\d+)/vinculos/encerrar$#', 'Admin@unassign'],

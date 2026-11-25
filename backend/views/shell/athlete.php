@@ -1,12 +1,15 @@
 <?php /** @var string $inner @var string $active */
+$unreadN = \Correon\Notify::unread((int) $user['id']);
 $items = [
 	'home' => ['/app', 'Início'],
+	'avisos' => ['/app/avisos', 'Avisos' . ($unreadN ? " ($unreadN)" : '')],
 	'perfil' => ['/app/perfil', 'Meu perfil'],
 	'modalidades' => ['/app/modalidades', 'Minhas modalidades'],
 	'treinos' => ['/app/treinos', 'Meus treinos'],
 	'treinador' => ['/app/treinador', 'Meu treinador'],
 	'personal' => ['/app/personal', 'Personal Trainer'],
 	'assinaturas' => ['/app/assinaturas', 'Assinaturas'],
+	'privacidade' => ['/app/privacidade', 'Privacidade'],
 	'senha' => ['/app/senha', 'Alterar senha'],
 ];
 ?>

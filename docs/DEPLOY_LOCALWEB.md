@@ -27,5 +27,10 @@
 7. Ative o redirecionamento HTTPS no `.htaccess` (linhas comentadas) depois de confirmar o SSL.
 8. Teste: `/entrar`, `/cadastro`, `/recuperar-senha` (e-mail chega?), acesso negado entre perfis.
 
+## Conteúdo e fotos (Sprint 8)
+- A Hero 7 usa `/api/v1/public/...`: o `.htaccess` precisa estar ativo (rota `api`).
+- `correon/storage/uploads/` precisa de permissão de escrita e deve entrar no backup (fotos).
+- Requer as extensões PHP **GD** e **EXIF**; `.user.ini` define o tamanho de upload.
+
 ## Pendente de confirmar com a LocalWeb
 SSH/Composer, `mod_rewrite` ativo, SMTP/`mail()` entregando e-mail, versão do PHP selecionada (8.3).

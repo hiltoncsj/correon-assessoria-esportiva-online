@@ -20,7 +20,7 @@ if (!str_ends_with((string) Correon\Env::get('DB_NAME'), '_test')) {
 $php = PHP_BINARY;
 $pdo = Db::pdo();
 $pdo->exec('SET FOREIGN_KEY_CHECKS=0');
-foreach (['workout_template_items', 'workout_template_sessions', 'workout_templates', 'athlete_hr_zones', 'athlete_hr_settings', 'pt_sessions', 'pt_packages', 'contract_events', 'charges', 'contracts', 'plan_prices', 'trainer_settings', 'capacity_exceptions', 'trainer_availability', 'workout_log_revisions', 'workout_logs', 'workout_versions', 'workout_items', 'workouts', 'trainer_athletes', 'modalities', 'athlete_profiles', 'audit_log', 'consents', 'password_resets', 'rate_events', 'user_roles', 'users', 'schema_migrations'] as $t) {
+foreach (['workout_template_items', 'workout_template_sessions', 'workout_templates', 'athlete_hr_zones', 'athlete_hr_settings', 'contents', 'media', 'notifications', 'pt_sessions', 'pt_packages', 'contract_events', 'charges', 'contracts', 'plan_prices', 'trainer_settings', 'capacity_exceptions', 'trainer_availability', 'workout_log_revisions', 'workout_logs', 'workout_versions', 'workout_items', 'workouts', 'trainer_athletes', 'modalities', 'athlete_profiles', 'audit_log', 'consents', 'password_resets', 'rate_events', 'user_roles', 'users', 'schema_migrations'] as $t) {
     $pdo->exec("DROP TABLE IF EXISTS $t"); // somente no banco de teste
 }
 $pdo->exec('DROP TABLE IF EXISTS roles');
@@ -1269,6 +1269,140 @@ $before = $n();
 $ask('08:00');
 check('pacote cancelado não aceita pedidos', $n() === $before);
 check('ações do Personal auditadas', (int) Db::one("SELECT COUNT(*) c FROM audit_log WHERE action LIKE 'pt\\_%'")['c'] >= 10);
+
+echo "Sprint 8 — conteúdo, consentimento e avisos\n";
+Db::run('DELETE FROM rate_events');
+array_map('unlink', glob(BASE_PATH . '/storage/uploads/*') ?: []);
+$adm = new Client(); $adm->post('/entrar', ['email' => 'adm@example.com', 'password' => 'senha-staff-12345']);
+$mar = new Client(); $mar->post('/entrar', ['email' => 'maria@example.com', 'password' => 'final-senha-77777']);
+$tr1 = new Client(); $tr1->post('/entrar', ['email' => 'trn@example.com', 'password' => 'senha-staff-12345']);
+$anonApi = new Client();
+$api = static function () use ($anonApi): array { [$s, $b] = $anonApi->req('GET', '/api/v1/public/comunidade'); return [$s, json_decode($b, true) ?: [], $b]; };
+[$s, $d] = $api();
+check('API pública responde vazia', $s === 200 && $d === ['results' => [], 'news' => [], 'events' => []]);
+check('API pública não cria cookie de sessão', !preg_grep('/^Set-Cookie:/i', $anonApi->lastHeaders));
+[$s] = $anonApi->req('GET', '/api/v1/public/usuarios');
+check('API não expõe outros recursos (404)', $s === 404);
+foreach (['/admin/conteudo', '/admin/comunicados', '/admin/conteudo/novo?tipo=news'] as $path) {
+    [$s] = $adm->req('GET', $path); [$s2] = $tr1->req('GET', $path); [$s3] = $mar->req('GET', $path);
+    check("$path: só admin", $s === 200 && $s2 === 403 && $s3 === 403, "$s $s2 $s3");
+}
+$form = static fn (array $o) => $o + ['title' => 'João da Silva', 'content_date' => date('Y-m-d'), 'category' => 'Corrida', 'competition' => '10 km de Santos', 'distance' => '10 km',
+    'result_text' => '42:10', 'placement' => '', 'summary' => '', 'place' => '', 'event_time' => '', 'event_status' => '', 'link_url' => '', 'registration_url' => '', 'image_alt' => '', 'athlete_id' => '', 'publish_at' => '', '_end' => '1'];
+$create = static function (string $type, array $data) use ($adm, $form): array {
+    [$s] = $adm->post('/admin/conteudo', ['type' => $type] + $form($data), "/admin/conteudo/novo?tipo=$type");
+    return [$s, (int) preg_replace('#.*/#', '', (string) $adm->header('Location'))];
+};
+$n = static fn () => (int) Db::one('SELECT COUNT(*) c FROM contents')['c'];
+[$s] = $create('result', ['action' => 'publish']);
+check('resultado sem autorização declarada não é publicado', $s === 422 && $n() === 0);
+[$s] = $create('news', ['action' => 'save', 'category' => 'Equipe', 'summary' => 'x', 'link_url' => 'javascript:alert(1)']);
+check('link javascript: é recusado', $s === 422 && $n() === 0);
+[$s, $r1] = $create('result', ['action' => 'publish', 'consent_declared' => '1']);
+[, $d] = $api();
+check('com autorização: resultado aparece na API', $s === 303 && ($d['results'][0]['athlete'] ?? '') === 'João da Silva' && $d['results'][0]['result'] === '42:10');
+check('API não expõe ids de usuário nem campos internos', !isset($d['results'][0]['athlete_id']) && !isset($d['results'][0]['consent_declared']) && !isset($d['results'][0]['status']));
+
+$mariaId = $uid('maria@example.com');
+[$s] = $create('result', ['action' => 'publish', 'title' => 'Maria T.', 'athlete_id' => (string) $mariaId, 'consent_declared' => '1']);
+check('atleta cadastrado sem autorização DELE: não publica (mesmo com declaração do admin)', $s === 422);
+[$s, $rm] = $create('result', ['action' => 'save', 'title' => 'Maria T.', 'athlete_id' => (string) $mariaId]);
+check('mas pode ficar como rascunho', $s === 303 && Db::one('SELECT status s FROM contents WHERE id = ?', [$rm])['s'] === 'draft');
+[$s] = $mar->post('/app/privacidade', ['publicacao' => '1'], '/app/privacidade');
+check('atleta autoriza em Privacidade', $s === 303 && Correon\Content::hasConsent($mariaId));
+$adm->post("/admin/conteudo/$rm", ['action' => 'publish'] + $form(['title' => 'Maria T.', 'athlete_id' => (string) $mariaId, 'consent_declared' => '1']), "/admin/conteudo/$rm");
+[, , $raw] = $api();
+check('depois da autorização, publica', str_contains($raw, 'Maria T.'));
+$mar->post('/app/privacidade', [], '/app/privacidade');
+[, , $raw] = $api();
+check('atleta retira a autorização: sai do site na hora', !str_contains($raw, 'Maria T.') && !Correon\Content::hasConsent($mariaId));
+[$s, $b] = $adm->req('GET', '/admin/conteudo');
+check('admin vê que está fora do ar por falta de autorização', str_contains($b, 'fora do ar: sem autorização'));
+check('concessão e retirada auditadas', Db::one("SELECT id FROM audit_log WHERE action = 'consent_granted'") !== null && Db::one("SELECT id FROM audit_log WHERE action = 'consent_revoked'") !== null);
+
+echo "Rascunho, agendamento, eventos\n";
+[$s, $nw] = $create('news', ['action' => 'save', 'title' => 'Treino <script>alert(1)</script> coletivo', 'category' => 'Equipe', 'summary' => 'Sábado na orla', 'competition' => '', 'result_text' => '']);
+[, $d] = $api();
+check('rascunho não aparece', $s === 303 && count($d['news']) === 0);
+$adm->post("/admin/conteudo/$nw", ['action' => 'publish'] + $form(['title' => 'Treino <script>alert(1)</script> coletivo', 'category' => 'Equipe', 'summary' => 'Sábado na orla', 'publish_at' => date('Y-m-d\TH:i', strtotime('+1 day'))]), "/admin/conteudo/$nw");
+[, $d] = $api();
+check('agendado para o futuro ainda não aparece', count($d['news']) === 0);
+Db::run('UPDATE contents SET publish_at = NOW() - INTERVAL 1 MINUTE WHERE id = ?', [$nw]);
+[, $d, $raw] = $api();
+check('chegada a hora, aparece sozinho (sem cron)', count($d['news']) === 1);
+check('HTML no título sai escapado no JSON', !str_contains($raw, '<script>'));
+[$s, $b] = $adm->req('GET', '/admin/conteudo');
+check('...e na lista do admin', !str_contains($b, '<script>alert(1)</script>'));
+$create('event', ['action' => 'publish', 'title' => 'Prova futura', 'content_date' => date('Y-m-d', strtotime('+30 days')), 'place' => 'Santos']);
+$create('event', ['action' => 'publish', 'title' => 'Prova passada', 'content_date' => date('Y-m-d', strtotime('-30 days')), 'place' => 'Santos']);
+[, $d] = $api();
+$st = array_column($d['events'], 'status', 'name');
+check('situação do evento calculada pela data', ($st['Prova futura'] ?? '') === 'proximo' && ($st['Prova passada'] ?? '') === 'realizado');
+$before = $n();
+$adm->post('/admin/conteudo', ['type' => 'news', 'title' => 'Cortado', 'action' => 'publish'], '/admin/conteudo/novo?tipo=news');
+check('envio incompleto não grava', $n() === $before);
+
+echo "Fotos\n";
+$tmpPng = tempnam(sys_get_temp_dir(), 'img') . '.png';
+$im = imagecreatetruecolor(2000, 1000);
+imagefill($im, 0, 0, imagecolorallocate($im, 1, 205, 82));
+imagepng($im, $tmpPng);
+$tmpPhp = tempnam(sys_get_temp_dir(), 'evil') . '.jpg';
+file_put_contents($tmpPhp, "<?php echo 'x'; ?>");
+$upload = static function (string $path, array $fields, string $file, string $mime, string $name) use ($adm): array {
+    $fields['_csrf'] = $adm->csrf('/admin/conteudo/novo?tipo=news');
+    $fields['image'] = new CURLFile($file, $mime, $name);
+    $ch = curl_init('http://127.0.0.1:8099' . $path);
+    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_HEADER => true, CURLOPT_FOLLOWLOCATION => false, CURLOPT_TIMEOUT => 20,
+        CURLOPT_COOKIEFILE => $adm->jar, CURLOPT_COOKIEJAR => $adm->jar, CURLOPT_POST => true, CURLOPT_POSTFIELDS => $fields]);
+    $raw = (string) curl_exec($ch);
+    $status = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+    curl_close($ch);
+    preg_match('/^Location:\s*(\S+)/mi', $raw, $m);
+    return [$status, (int) preg_replace('#.*/#', '', $m[1] ?? '')];
+};
+$base = ['type' => 'news', 'title' => 'Com foto', 'content_date' => date('Y-m-d'), 'category' => 'Equipe', 'summary' => 'x', 'action' => 'publish', '_end' => '1'];
+$before = $n();
+[$s] = $upload('/admin/conteudo', $base, $tmpPng, 'image/png', 'a.png');
+check('foto sem declaração de autorização não é publicada', $s === 422 && $n() === $before);
+[$s] = $upload('/admin/conteudo', $base + ['consent_declared' => '1'], $tmpPhp, 'image/jpeg', 'foto.php.jpg');
+check('arquivo que não é imagem é recusado', $s === 422 && $n() === $before && !glob(BASE_PATH . '/storage/uploads/*.php*'));
+[$s, $cf] = $upload('/admin/conteudo', $base + ['consent_declared' => '1'], $tmpPng, 'image/png', 'a.png');
+$img = Db::one('SELECT m.* FROM contents c JOIN media m ON m.id = c.image_id WHERE c.id = ?', [$cf]);
+check('foto válida é regravada e reduzida (2000px → 1280px), com nome aleatório', $s === 303 && $img && (int) $img['width'] === 1280 && preg_match('/^[0-9a-f]{32}\.(webp|jpg)$/', $img['filename']));
+check('fica fora da pasta pública', is_file(BASE_PATH . '/storage/uploads/' . $img['filename']) && !is_file(BASE_PATH . '/public/' . $img['filename']));
+$url = '/api/v1/public/imagem/' . $img['id'];
+[$s] = $anonApi->req('GET', $url);
+check('foto de conteúdo publicado é servida', $s === 200 && str_starts_with((string) $anonApi->header('Content-Type'), 'image/'));
+$adm->post("/admin/conteudo/$cf", ['action' => 'archive'], "/admin/conteudo/$cf");
+[$s] = $anonApi->req('GET', $url);
+[, , $raw] = $api();
+check('arquivado: some do site e a foto deixa de ser pública', $s === 404 && !str_contains($raw, 'Com foto'));
+[$s] = $adm->req('GET', '/admin/imagem/' . $img['id']);
+check('admin ainda vê a foto arquivada', $s === 200);
+
+echo "Avisos\n";
+Db::run('DELETE FROM notifications');
+$tr1->post('/treinador/treinos/novo', ['athlete_id' => $mariaId, 'modality' => 'corrida', 'title' => 'Treino avisado', 'scheduled_date' => date('Y-m-d', strtotime('+2 days')), 'notes' => '', 'action' => 'publish',
+    'items' => [['label' => 'Trote', 'duration_minutes' => '20']]], "/treinador/treinos/novo?atleta=$mariaId&modalidade=corrida");
+check('publicar treino avisa o atleta', Correon\Notify::unread($mariaId) === 1);
+[$s, $b] = $mar->req('GET', '/app');
+check('menu mostra "Avisos (1)"', str_contains($b, 'Avisos (1)'));
+[$s, $b] = $mar->req('GET', '/app/avisos');
+check('aviso aparece como Novo e é marcado como lido', str_contains($b, 'Treino avisado') && str_contains($b, '>Novo<') && Correon\Notify::unread($mariaId) === 0);
+$jo = new Client(); $jo->post('/entrar', ['email' => 'joao@example.com', 'password' => 'senha-forte-123']);
+[, $b] = $jo->req('GET', '/app/avisos');
+check('outro atleta não vê meus avisos', !str_contains($b, 'Treino avisado'));
+$adm->post('/admin/comunicados', ['title' => 'x', 'body' => '', 'audience' => 'all'], '/admin/comunicados');
+check('comunicado inválido não envia', (int) Db::one('SELECT COUNT(*) c FROM notifications')['c'] === 1);
+$adm->post('/admin/comunicados', ['title' => 'Treino de corrida <b>sábado</b>', 'body' => 'Na orla às 7h', 'audience' => 'corrida'], '/admin/comunicados');
+$ids = array_column(Db::all("SELECT user_id FROM notifications WHERE title LIKE 'Treino de corrida%'"), 'user_id');
+$corrida = array_column(Db::all("SELECT DISTINCT ta.athlete_id FROM trainer_athletes ta JOIN modalities m ON m.id = ta.modality_id WHERE ta.status = 'active' AND m.slug = 'corrida'"), 'athlete_id');
+sort($ids); sort($corrida);
+check('comunicado vai só para os atletas da modalidade', $ids == $corrida && count($ids) > 0);
+[, $b] = $mar->req('GET', '/app/avisos');
+check('comunicado escapado na área do atleta', str_contains($b, '&lt;b&gt;sábado') && !str_contains($b, '<b>sábado</b>'));
+@unlink($tmpPng); @unlink($tmpPhp);
 
 echo "\nResultado: $pass ok, $fail falha(s)\n";
 exit($fail ? 1 : 0);
