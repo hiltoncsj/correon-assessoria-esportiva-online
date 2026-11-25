@@ -158,7 +158,15 @@ final class Templates
         if ($mods && !in_array($mod, $mods, true)) {
             App::notFound();
         }
-        $templates = $athletes = [];
+        $semana = (string) ($_GET['semana'] ?? date('Y-m-d'));
+        $d = \DateTimeImmutable::createFromFormat('!Y-m-d', $semana);
+        if (!$d || $d->format('Y-m-d') !== $semana) {
+            $semana = date('Y-m-d');
+        }
+        $monday = self::monday($semana);
+        $sunday = (new \DateTimeImmutable($monday))->modify('+6 days')->format('Y-m-d');
+
+        $templates = $pending = $done = [];
         if ($mod !== '') {
             $templates = Db::all(
                 "SELECT t.id, t.name, t.level_description
@@ -167,17 +175,29 @@ final class Templates
                    AND EXISTS (SELECT 1 FROM workout_template_items i WHERE i.template_id = t.id) ORDER BY t.name",
                 [$u['id'], $mod]
             );
+            // week_status: situação dos treinos do atleta nesta modalidade e semana (NULL = ainda sem treino)
             $athletes = Db::all(
                 "SELECT a.id, a.name, ta.default_template_id,
-                   (SELECT COUNT(*) FROM athlete_hr_zones z WHERE z.athlete_id = a.id) AS zone_count
+                   (SELECT COUNT(*) FROM athlete_hr_zones z WHERE z.athlete_id = a.id) AS zone_count,
+                   (SELECT GROUP_CONCAT(DISTINCT w.status ORDER BY w.status) FROM workouts w
+                      WHERE w.athlete_id = a.id AND w.modality_id = ta.modality_id AND w.status <> 'cancelled'
+                        AND w.scheduled_date BETWEEN ? AND ?) AS week_status
                  FROM trainer_athletes ta JOIN users a ON a.id = ta.athlete_id JOIN modalities m ON m.id = ta.modality_id
                  WHERE ta.trainer_id = ? AND m.slug = ? AND ta.status = 'active' ORDER BY a.name",
-                [$u['id'], $mod]
+                [$monday, $sunday, $u['id'], $mod]
             );
+            foreach ($athletes as $a) {
+                if ($a['week_status'] === null) {
+                    $pending[] = $a;
+                } else {
+                    $done[] = $a;
+                }
+            }
         }
+        $step = static fn (string $delta): string => (new \DateTimeImmutable($monday))->modify($delta)->format('Y-m-d');
         View::render('trainer/apply', ['title' => 'Aplicar modelos', 'shell' => 'trainer', 'active' => 'aplicar',
-            'mods' => $mods, 'mod' => $mod, 'templates' => $templates, 'athletes' => $athletes,
-            'monday' => self::monday(date('Y-m-d'))]);
+            'mods' => $mods, 'mod' => $mod, 'templates' => $templates, 'pending' => $pending, 'done' => $done,
+            'monday' => $monday, 'sunday' => $sunday, 'prev' => $step('-7 days'), 'next' => $step('+7 days')]);
     }
 
     public static function applySave(): never
@@ -188,8 +208,8 @@ final class Templates
         if (!in_array($mod, self::modalities($t), true)) {
             App::notFound();
         }
-        $back = '/treinador/modelos/aplicar?modalidade=' . $mod;
         $modId = Workout::modalityId($mod);
+        $back = '/treinador/modelos/aplicar?modalidade=' . $mod;
         $date = Http::input('scheduled_date');
         $d = \DateTimeImmutable::createFromFormat('!Y-m-d', $date);
         if (!$d || $d->format('Y-m-d') !== $date || $d < new \DateTimeImmutable('-1 year') || $d > new \DateTimeImmutable('+2 years')) {
@@ -197,6 +217,7 @@ final class Templates
             Http::redirect($back);
         }
         $monday = self::monday($date);
+        $back = '/treinador/modelos/aplicar?modalidade=' . $mod . '&semana=' . $monday;
         $status = Http::input('publish') === '1' ? 'published' : 'draft';
 
         $picks = [];
@@ -247,7 +268,15 @@ final class Templates
         $pdo = Db::pdo();
         $pdo->beginTransaction();
         try {
+            $sunday = (new \DateTimeImmutable($monday))->modify('+6 days')->format('Y-m-d');
             foreach ($picks as $athleteId => $tplId) {
+                // Quem já tem treino nesta modalidade e semana não recebe outro (some da lista de pendentes).
+                $busy = Db::one("SELECT id FROM workouts WHERE athlete_id = ? AND modality_id = ? AND status <> 'cancelled' AND scheduled_date BETWEEN ? AND ? LIMIT 1",
+                    [$athleteId, $modId, $monday, $sunday]);
+                if ($busy) {
+                    $skipped[$athleteId] = (string) Db::one('SELECT name FROM users WHERE id = ?', [$athleteId])['name'];
+                    continue;
+                }
                 foreach ($tpl[$tplId]['sessions'] as $s) {
                     $day = (new \DateTimeImmutable($monday))->modify('+' . ((int) $s['weekday'] - 1) . ' days')->format('Y-m-d');
                     $title = mb_substr($tpl[$tplId]['name'] . ' · ' . $s['title'], 0, 120);
@@ -282,7 +311,7 @@ final class Templates
         }
         $msg = $created . ' treino(s) ' . ($status === 'published' ? 'publicado(s)' : 'salvo(s) como rascunho') . ' na semana de ' . date('d/m/Y', strtotime($monday)) . '.';
         if ($skipped) {
-            $msg .= ' Já existiam e foram ignorados: ' . implode(', ', $skipped) . '.';
+            $msg .= ' Já tinham treino nesta semana e foram ignorados: ' . implode(', ', $skipped) . '.';
         }
         Http::flash($created ? 'ok' : 'err', $msg);
         Http::redirect($back);

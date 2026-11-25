@@ -230,3 +230,6 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { box-shadow: 
 }
 
 .grid > .tile, .grid > .tile + .tile { margin-top: 0; }
+
+.done-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-sm); }
+.done-list li { display: flex; align-items: center; gap: var(--space-sm); flex-wrap: wrap; }
