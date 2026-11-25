@@ -9,6 +9,13 @@ final class View
         return htmlspecialchars((string) $s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
     }
 
+    /** URL de um arquivo estático com a versão (data de modificação), para o navegador não usar cópia antiga. */
+    public static function asset(string $path): string
+    {
+        $file = dirname((string) ($_SERVER['SCRIPT_FILENAME'] ?? '')) . $path;
+        return $path . (is_file($file) ? '?v=' . filemtime($file) : '');
+    }
+
     /** 2026-11-25 -> "qua, 25/11/2026" */
     public static function dateBr(?string $ymd, bool $weekday = true): string
     {

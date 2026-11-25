@@ -58,4 +58,4 @@ $dayDate = static fn (int $d) => date('d/m', strtotime($monday . ' +' . ($d - 1)
 	</div>
 	<input type="hidden" name="_end" value="1">
 </form>
-<script src="/assets/workout-form.js" defer></script>
+<script src="<?= e(\Correon\View::asset('/assets/workout-form.js')) ?>" defer></script>

@@ -7,8 +7,8 @@
 	<meta name="robots" content="noindex, nofollow">
 	<title><?= e($title) ?> — CorreON</title>
 	<link rel="icon" href="/favicon.svg" type="image/svg+xml">
-	<link rel="stylesheet" href="/assets/tokens.css">
-	<link rel="stylesheet" href="/assets/app.css">
+	<link rel="stylesheet" href="<?= e(\Correon\View::asset('/assets/tokens.css')) ?>">
+	<link rel="stylesheet" href="<?= e(\Correon\View::asset('/assets/app.css')) ?>">
 </head>
 <body>
 	<a class="skip" href="#conteudo">Pular para o conteúdo</a>

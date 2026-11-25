@@ -5,7 +5,9 @@
 		rows.forEach(function (row, i) {
 			row.querySelectorAll('input, select').forEach(function (el) {
 				if (sIdx !== null) { el.name = el.name.replace(/sessions\[\d+\]/, 'sessions[' + sIdx + ']'); }
-				el.name = el.name.replace(/items\[\d+\]/, 'items[' + i + ']');
+				// o índice da LINHA é o colchete imediatamente antes do campo:
+				// items[3][label]  ou  sessions[0][items][3][label]
+				el.name = el.name.replace(/\[\d+\](\[[a-z_]+\])$/, '[' + i + ']$1');
 			});
 		});
 	}

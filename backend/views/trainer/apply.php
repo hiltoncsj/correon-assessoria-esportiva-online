@@ -84,4 +84,4 @@ $modNames = ['corrida' => 'Corrida', 'triathlon' => 'Triathlon', 'musculacao' =>
 		</section>
 	<?php endif; ?>
 <?php endif; ?>
-<script src="/assets/workout-form.js" defer></script>
+<script src="<?= e(\Correon\View::asset('/assets/workout-form.js')) ?>" defer></script>

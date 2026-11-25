@@ -82,4 +82,4 @@ for ($k = 0; $k < $extra; $k++) { $list[] = ['title' => '', 'discipline' => $dis
 	<?php if (!$isNew): ?><p class="muted">Alterar o modelo não muda os treinos que você já aplicou a atletas.</p><?php endif; ?>
 	<input type="hidden" name="_end" value="1">
 </form>
-<script src="/assets/workout-form.js" defer></script>
+<script src="<?= e(\Correon\View::asset('/assets/workout-form.js')) ?>" defer></script>

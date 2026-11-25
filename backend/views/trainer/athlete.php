@@ -67,7 +67,7 @@ $badge = ['draft' => 'badge--draft', 'published' => 'badge--ok', 'cancelled' => 
 			<button class="btn btn--sm btn--ghost" type="submit" name="action" value="defaults" data-confirm="Calcular as zonas pelos percentuais padrão? Isso substitui as faixas atuais deste atleta.">Calcular pelo padrão</button>
 		</div>
 	</form>
-	<script src="/assets/workout-form.js" defer></script>
+	<script src="<?= e(\Correon\View::asset('/assets/workout-form.js')) ?>" defer></script>
 </section>
 
 <h2>Treinos</h2>

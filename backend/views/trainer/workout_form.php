@@ -88,7 +88,7 @@ $statusClass = ['draft' => 'badge--draft', 'published' => 'badge--ok', 'cancelle
 	</div>
 	<p class="muted">“Salvar” em um treino já publicado atualiza o que o atleta vê e gera uma nova versão no histórico.</p>
 </form>
-<script src="/assets/workout-form.js" defer></script>
+<script src="<?= e(\Correon\View::asset('/assets/workout-form.js')) ?>" defer></script>
 <?php endif; ?>
 
 <?php if ($log): ?>
