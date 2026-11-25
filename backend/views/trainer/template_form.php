@@ -1,13 +1,13 @@
 <?php
 /** @var string $modality @var string $modalityName @var ?array $t @var array $vals @var array $sessions @var array $errors
  *  @var array $disciplines @var bool $isNew */
-use Correon\{Templates, Workout};
+use Correon\Workout;
 $action = $isNew ? '/treinador/modelos/novo' : '/treinador/modelos/' . (int) $t['id'];
 $err = static fn (string $k) => !empty($errors[$k]) ? '<span class="field__err">' . e($errors[$k]) . '</span>' : '';
 $archived = !$isNew && $t['archived_at'];
 $list = array_values($sessions);
 $extra = $list ? 1 : 3;
-for ($k = 0; $k < $extra; $k++) { $list[] = ['weekday' => '', 'title' => '', 'discipline' => $disciplines[0], 'notes' => '', 'items' => []]; }
+for ($k = 0; $k < $extra; $k++) { $list[] = ['title' => '', 'discipline' => $disciplines[0], 'notes' => '', 'items' => []]; }
 ?>
 <p class="eyebrow"><a href="/treinador/modelos">← Modelos de treino</a></p>
 <h1><?= $isNew ? 'Novo modelo semanal' : e($t['name']) ?></h1>
@@ -31,7 +31,7 @@ for ($k = 0; $k < $extra; $k++) { $list[] = ['weekday' => '', 'title' => '', 'di
 			<?= $err('level_description') ?>
 		</label>
 	</div>
-	<p class="muted">Um modelo é uma <strong>semana</strong> de treinos: cada sessão cai em um dia da semana. As zonas de FC (Z1 a Z5) são convertidas em bpm para cada atleta, conforme as zonas dele.</p>
+	<p class="muted">Um modelo reúne as <strong>sessões</strong> de um nível (ex.: 3 de velocidade e 1 longo). As sessões não têm dia fixo: você escolhe o dia de cada uma na hora de enviar para cada atleta. As zonas de FC (Z1 a Z5) são convertidas em bpm para cada atleta, conforme as zonas dele.</p>
 	<?php if (!empty($errors['sessions'])): ?><p class="field__err"><?= e($errors['sessions']) ?></p><?php endif; ?>
 
 	<div data-sessions>
@@ -39,14 +39,8 @@ for ($k = 0; $k < $extra; $k++) { $list[] = ['weekday' => '', 'title' => '', 'di
 			<fieldset class="session" data-session>
 				<legend data-session-title>Sessão <?= $si + 1 ?></legend>
 				<div class="row">
-					<label class="field">Dia da semana
-						<select name="sessions[<?= $si ?>][weekday]">
-							<option value="">—</option>
-							<?php foreach (Templates::WEEKDAYS as $num => $label): ?><option value="<?= $num ?>"<?= (string) ($s['weekday'] ?? '') === (string) $num ? ' selected' : '' ?>><?= e($label) ?></option><?php endforeach; ?>
-						</select>
-					</label>
 					<label class="field">Título da sessão
-						<input type="text" name="sessions[<?= $si ?>][title]" value="<?= e((string) ($s['title'] ?? '')) ?>" maxlength="120" placeholder="ex.: Intervalado de velocidade">
+						<input type="text" name="sessions[<?= $si ?>][title]" value="<?= e((string) ($s['title'] ?? '')) ?>" maxlength="120" placeholder="ex.: Velocidade 1 (vazio = Sessão N)">
 					</label>
 					<?php if (count($disciplines) > 1): ?>
 						<label class="field">Disciplina
@@ -86,5 +80,6 @@ for ($k = 0; $k < $extra; $k++) { $list[] = ['weekday' => '', 'title' => '', 'di
 		<?php endif; ?>
 	</div>
 	<?php if (!$isNew): ?><p class="muted">Alterar o modelo não muda os treinos que você já aplicou a atletas.</p><?php endif; ?>
+	<input type="hidden" name="_end" value="1">
 </form>
 <script src="/assets/workout-form.js" defer></script>

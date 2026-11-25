@@ -11,6 +11,7 @@
 └── public_html/             ← conteúdo de dist/ + arquivos abaixo
     ├── (dist/*: index.html, _astro/, favicon...)
     ├── app.php              (de backend/public/app.php)
+    ├── .user.ini            (de backend/public/.user.ini)
     ├── .htaccess            (de backend/public/.htaccess)
     └── assets/              (app.css, tokens.css, logo-correon.png)
 ```

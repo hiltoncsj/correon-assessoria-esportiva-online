@@ -42,7 +42,7 @@ final class Trainer
             [$athleteId, ...$mods]
         );
         $levels = Db::all(
-            "SELECT m.slug, m.name, ta.default_template_id FROM trainer_athletes ta JOIN modalities m ON m.id = ta.modality_id
+            "SELECT m.slug, m.name, ta.default_template_id, ta.train_days FROM trainer_athletes ta JOIN modalities m ON m.id = ta.modality_id
              WHERE ta.trainer_id = ? AND ta.athlete_id = ? AND ta.status = 'active' ORDER BY m.id",
             [$u['id'], $athleteId]
         );
@@ -98,25 +98,123 @@ final class Trainer
         } else {
             App::notFound();
         }
+        self::storeZones($athleteId, $zones, $max, (int) $u['id']);
+        Audit::log('hr_zones_updated', (int) $u['id'], 'user', $athleteId, ['zones' => count($zones), 'mode' => $action]); // sem os valores (dado pessoal)
+        Http::flash('ok', $action === 'defaults' ? 'Zonas calculadas pela FC máxima. Ajuste individualmente o que precisar.' : 'Zonas de frequência cardíaca salvas.');
+        Http::redirect($back);
+    }
+
+    /** Todos os atletas do treinador com as 7 zonas de FC, para ajuste individual. */
+    public static function zonesAll(): never
+    {
+        $u = App::require('trainer');
+        self::zonesTable($u, null, [], 200);
+    }
+
+    /**
+     * z[ID][max] e z[ID][zones][n][min|max]; calc=ID calcula pelo padrão só daquele atleta.
+     * Grava apenas as linhas que mudaram; se alguma linha for inválida, nada é gravado.
+     */
+    public static function zonesAllSave(): never
+    {
+        $u = App::require('trainer');
+        $t = (int) $u['id'];
+        if (!Http::formComplete()) {
+            Http::flash('err', 'A tabela ficou grande demais para o servidor e chegou incompleta. Nada foi salvo. Ajuste pela página de cada atleta ou avise o suporte.');
+            Http::redirect('/treinador/zonas');
+        }
+        $calc = Http::input('calc');
+        $rows = is_array($_POST['z'] ?? null) ? $_POST['z'] : [];
+        $changes = [];
+        $errors = [];
+        foreach ($rows as $athleteId => $row) {
+            if (!ctype_digit((string) $athleteId) || !is_array($row) || !Workout::linkedModalities($t, (int) $athleteId)) {
+                App::notFound();
+            }
+            $athleteId = (int) $athleteId;
+            $maxRaw = is_string($row['max'] ?? null) ? trim($row['max']) : '';
+            $max = null;
+            if ($maxRaw !== '') {
+                if (!ctype_digit($maxRaw) || (int) $maxRaw < 100 || (int) $maxRaw > 230) {
+                    $errors[$athleteId] = 'FC máxima inválida (100 a 230).';
+                    continue;
+                }
+                $max = (int) $maxRaw;
+            }
+            if ($calc === (string) $athleteId) {
+                if ($max === null) {
+                    $errors[$athleteId] = 'Informe a FC máxima para calcular.';
+                    continue;
+                }
+                $zones = Workout::computeZones($max);
+            } else {
+                [$zones, $err] = Workout::parseZones($row['zones'] ?? null);
+                if ($err !== null) {
+                    $errors[$athleteId] = $err;
+                    continue;
+                }
+            }
+            if ($zones != Workout::zones($athleteId) || ($max !== null && $max !== Workout::maxHr($athleteId))) {
+                $changes[$athleteId] = [$zones, $max];
+            }
+        }
+        if ($errors) {
+            self::zonesTable($u, $rows, $errors, 422);
+        }
+        foreach ($changes as $athleteId => [$zones, $max]) {
+            self::storeZones($athleteId, $zones, $max, $t);
+            Audit::log('hr_zones_updated', $t, 'user', $athleteId, ['zones' => count($zones), 'mode' => $calc === (string) $athleteId ? 'defaults' : 'save']);
+        }
+        Http::flash('ok', $changes ? count($changes) . ' atleta(s) com zonas atualizadas.' : 'Nenhuma alteração.');
+        Http::redirect('/treinador/zonas');
+    }
+
+    /** @param array<int|string,mixed>|null $posted valores digitados (para reexibir após erro) @param array<int,string> $errors */
+    private static function zonesTable(array $u, ?array $posted, array $errors, int $status): never
+    {
+        $athletes = Db::all(
+            "SELECT a.id, a.name, GROUP_CONCAT(m.name ORDER BY m.id SEPARATOR ', ') AS modalities
+             FROM trainer_athletes ta JOIN users a ON a.id = ta.athlete_id JOIN modalities m ON m.id = ta.modality_id
+             WHERE ta.trainer_id = ? AND ta.status = 'active' GROUP BY a.id, a.name ORDER BY a.name",
+            [$u['id']]
+        );
+        foreach ($athletes as &$a) {
+            $id = (int) $a['id'];
+            $p = $posted[$id] ?? null;
+            $zones = Workout::zones($id);
+            $a['max'] = $p !== null ? (string) (is_string($p['max'] ?? null) ? $p['max'] : '') : (string) (Workout::maxHr($id) ?? '');
+            for ($z = 1; $z <= Workout::ZONES; $z++) {
+                foreach (['min', 'max'] as $k) {
+                    $a['zones'][$z][$k] = $p !== null
+                        ? (string) (is_string($p['zones'][$z][$k] ?? null) ? $p['zones'][$z][$k] : '')
+                        : (string) ($zones[$z][$k] ?? '');
+                }
+            }
+        }
+        unset($a);
+        View::render('trainer/zones', ['title' => 'Zonas de FC', 'shell' => 'trainer', 'active' => 'zonas',
+            'athletes' => $athletes, 'errors' => $errors], $status);
+    }
+
+    /** @param array<int,array{min:int,max:int}> $zones */
+    private static function storeZones(int $athleteId, array $zones, ?int $max, int $byUser): void
+    {
         $pdo = Db::pdo();
         $pdo->beginTransaction();
         try {
             Db::run('DELETE FROM athlete_hr_zones WHERE athlete_id = ?', [$athleteId]);
             foreach ($zones as $z => $r) {
-                Db::run('INSERT INTO athlete_hr_zones (athlete_id, zone, bpm_min, bpm_max, updated_by) VALUES (?,?,?,?,?)', [$athleteId, $z, $r['min'], $r['max'], $u['id']]);
+                Db::run('INSERT INTO athlete_hr_zones (athlete_id, zone, bpm_min, bpm_max, updated_by) VALUES (?,?,?,?,?)', [$athleteId, $z, $r['min'], $r['max'], $byUser]);
             }
             if ($max !== null) {
                 Db::run('INSERT INTO athlete_hr_settings (athlete_id, max_hr, updated_by) VALUES (?,?,?) ON DUPLICATE KEY UPDATE max_hr = VALUES(max_hr), updated_by = VALUES(updated_by)',
-                    [$athleteId, $max, $u['id']]);
+                    [$athleteId, $max, $byUser]);
             }
             $pdo->commit();
         } catch (\Throwable $e) {
             $pdo->rollBack();
             throw $e;
         }
-        Audit::log('hr_zones_updated', (int) $u['id'], 'user', $athleteId, ['zones' => count($zones), 'mode' => $action]); // sem os valores (dado pessoal)
-        Http::flash('ok', $action === 'defaults' ? 'Zonas calculadas pela FC máxima. Ajuste individualmente o que precisar.' : 'Zonas de frequência cardíaca salvas.');
-        Http::redirect($back);
     }
 
     /** Define o treino padrão (nível) do atleta numa modalidade. */
@@ -137,10 +235,11 @@ final class Trainer
             }
             $value = (int) $row['id'];
         }
-        Db::run('UPDATE trainer_athletes SET default_template_id = ? WHERE trainer_id = ? AND athlete_id = ? AND modality_id = ? AND status = \'active\'',
-            [$value, $u['id'], $athleteId, Workout::modalityId($mod)]);
+        $days = Templates::parseDays(is_array($_POST['days'] ?? null) ? $_POST['days'] : []);
+        Db::run('UPDATE trainer_athletes SET default_template_id = ?, train_days = ? WHERE trainer_id = ? AND athlete_id = ? AND modality_id = ? AND status = \'active\'',
+            [$value, $days ? implode(',', $days) : null, $u['id'], $athleteId, Workout::modalityId($mod)]);
         Audit::log('athlete_level_set', (int) $u['id'], 'user', $athleteId, ['modality' => $mod, 'template_id' => $value]);
-        Http::flash('ok', 'Treino padrão do atleta atualizado.');
+        Http::flash('ok', 'Treino padrão e dias do atleta atualizados.');
         Http::redirect('/treinador/atletas/' . $athleteId . '#nivel');
     }
 

@@ -47,7 +47,7 @@
 		}
 		if (t.hasAttribute('data-add-session')) {
 			var all = document.querySelectorAll('[data-session]');
-			if (all.length >= 14) { return; }
+			if (all.length >= 100) { return; }
 			var copy = all[all.length - 1].cloneNode(true);
 			clearFields(copy);
 			var idx = all.length;

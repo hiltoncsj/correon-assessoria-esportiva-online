@@ -3,6 +3,7 @@ $items = [
 	'home' => ['/treinador', 'Meus atletas'],
 	'modelos' => ['/treinador/modelos', 'Modelos de treino'],
 	'aplicar' => ['/treinador/modelos/aplicar', 'Aplicar modelos'],
+	'zonas' => ['/treinador/zonas', 'Zonas de FC'],
 ];
 ?>
 <div class="shell">

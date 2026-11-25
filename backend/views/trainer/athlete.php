@@ -30,6 +30,12 @@ $badge = ['draft' => 'badge--draft', 'published' => 'badge--ok', 'cancelled' => 
 					<?php endforeach; ?>
 				</select>
 			</label>
+			<fieldset class="days">
+				<legend>Dias em que treina</legend>
+				<?php $sel = explode(',', (string) $lv['train_days']); foreach (\Correon\Templates::DAY_SHORT as $num => $label): ?>
+					<label class="days__d"><input type="checkbox" name="days[]" value="<?= $num ?>"<?= in_array((string) $num, $sel, true) ? ' checked' : '' ?>> <?= e($label) ?></label>
+				<?php endforeach; ?>
+			</fieldset>
 			<button class="btn btn--sm" type="submit">Salvar</button>
 		</form>
 	<?php endforeach; ?>

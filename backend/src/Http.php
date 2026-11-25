@@ -95,6 +95,15 @@ final class Http
         return $f;
     }
 
+    /**
+     * O PHP descarta em silêncio campos além de max_input_vars. Formulários grandes terminam com o campo
+     * oculto `_end`; se ele não chegou, o envio veio cortado e nada deve ser gravado.
+     */
+    public static function formComplete(): bool
+    {
+        return ($_POST['_end'] ?? '') === '1';
+    }
+
     public static function input(string $key): string
     {
         $v = $_POST[$key] ?? '';

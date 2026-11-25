@@ -59,3 +59,12 @@ Perguntas de produto não respondidas pelo cliente; adotei estes padrões (revis
 - **Design da área interna:** mantém as cores CorreON; botões e animações adaptam técnicas do design-system2 (brilho radial no botão, aperto no clique, cartões com reflexo e elevação, entrada com subida e atraso escalonado), só em CSS e desligadas com "reduzir movimento".
 - **Em aberto:** classificação automática do nível pelo pace de referência do atleta; semanas com repetição automática (várias semanas de uma vez); comparação de zonas por esporte (ciclismo/natação têm FC máxima própria).
 - **Aplicar modelos mostra só quem ainda não tem treino na semana.** A tela de aplicar é por semana (anterior/próxima). Atleta com qualquer treino não cancelado na modalidade e semana (publicado = "Enviado", rascunho = "Rascunho") sai da lista de pendentes e aparece em "Já com treino nesta semana". O servidor aplica a mesma regra: quem já tem treino na semana é ignorado (tela desatualizada ou envio duplicado), com aviso. Para trocar o treino de alguém, edite o treino dele na página do atleta.
+
+## 2026-11-25 — Sprint 3, ajuste 4: sessões livres, semana montada por atleta, tela de Zonas de FC
+Substitui, no ajuste 2, o "dia fixo por sessão" e o envio direto pela tela de aplicar.
+- **Sessões sem dia e sem quantidade fixa.** O modelo tem quantas sessões o treinador quiser (teto técnico de 100). `weekday` fica vazio (coluna agora opcional). Sessão sem título vira "Sessão N".
+- **Envio em 2 passos:** (1) semana + atletas por treino; (2) para cada atleta, grade de segunda a domingo escolhendo a sessão de cada dia (qualquer sessão, repetível; também de outros modelos do mesmo treinador/modalidade). Uma sessão por dia por atleta.
+- **Dias do atleta** (`trainer_athletes.train_days`): definidos na página do atleta; pré-montam a grade (1ª sessão no 1º dia etc.). Se vazios, são lembrados no primeiro envio; envios seguintes não os sobrescrevem.
+- **Tela "Zonas de FC"** (`/treinador/zonas`): todos os atletas do treinador, FC máxima e Z1..Z7 editáveis; "Calcular" por linha usa os percentuais padrão. Só grava linhas alteradas; uma linha inválida cancela tudo.
+- **Formulários grandes:** `public/.user.ini` define `max_input_vars=5000` (enviar junto no deploy). Formulários de modelo e de zonas têm o campo `_end`: se o PHP cortar o envio, nada é gravado e o usuário é avisado. No servidor local usar `php -d max_input_vars=5000`.
+- **Em aberto:** dois treinos no mesmo dia; repetir a semana anterior de um atleta; aplicar várias semanas de uma vez.

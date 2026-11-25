@@ -3,7 +3,7 @@ $modNames = ['corrida' => 'Corrida', 'triathlon' => 'Triathlon', 'musculacao' =>
 ?>
 <p class="eyebrow">Treinador</p>
 <h1>Aplicar modelos</h1>
-<p class="muted">Escolha a semana e marque os atletas de cada treino. Quem já recebeu treino na semana sai da lista, e ficam só os atletas que ainda não têm treino. Cada atleta recebe uma cópia da semana, que você pode ajustar individualmente.</p>
+<p class="muted">Passo 1: escolha a semana e marque os atletas de cada treino. No passo 2 você define em qual dia cada atleta faz cada sessão. Quem já recebeu treino na semana sai da lista, e ficam só os atletas que ainda não têm treino. Cada atleta recebe uma cópia da semana, que você pode ajustar individualmente.</p>
 
 <?php if (count($mods) > 1): ?>
 	<nav class="monthnav" aria-label="Modalidade">
@@ -32,14 +32,10 @@ $modNames = ['corrida' => 'Corrida', 'triathlon' => 'Triathlon', 'musculacao' =>
 	<?php if (!$pending): ?>
 		<div class="tile"><p><strong>Todos os atletas já têm treino nesta semana.</strong></p><p class="muted">Use a semana seguinte ou abra um atleta para ajustar o treino dele.</p></div>
 	<?php else: ?>
-	<form class="tile form form--wide" method="post" action="/treinador/modelos/aplicar" novalidate>
+	<form class="tile form form--wide" method="post" action="/treinador/modelos/montar" novalidate>
 		<input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
 		<input type="hidden" name="modality" value="<?= e($mod) ?>">
 		<input type="hidden" name="scheduled_date" value="<?= e($monday) ?>">
-		<label class="check">
-			<input type="checkbox" name="publish" value="1" checked>
-			<span>Publicar já para os atletas (desmarque para salvar como rascunho)</span>
-		</label>
 		<p class="muted">Marque, em cada treino, os atletas que o recebem. Um atleta só pode estar em um treino por semana.</p>
 		<div class="grid grid--apply">
 			<?php foreach ($templates as $t): ?>
@@ -56,7 +52,7 @@ $modNames = ['corrida' => 'Corrida', 'triathlon' => 'Triathlon', 'musculacao' =>
 			<?php endforeach; ?>
 		</div>
 		<div class="actions">
-			<button class="btn" type="submit">Aplicar semana</button>
+			<button class="btn" type="submit">Montar a semana →</button>
 			<a class="btn btn--ghost" href="/treinador/modelos">Gerenciar modelos</a>
 		</div>
 		<p class="muted">Atletas sem zonas de FC configuradas recebem o treino normalmente, mas verão apenas “Z1, Z2…” sem os bpm. Configure as zonas na página do atleta.</p>
