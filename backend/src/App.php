@@ -39,7 +39,9 @@ final class App
             'GET /app/senha' => 'Athlete@passwordForm', 'POST /app/senha' => 'Athlete@passwordSave',
             'GET /app/modalidades' => 'soon:modalidades', 'GET /app/treinos' => 'Athlete@workouts',
             'GET /app/treinador' => 'Athlete@trainers', 'GET /app/assinaturas' => 'soon:assinaturas',
-            'GET /treinador' => 'Trainer@home', 'GET /treinador/treinos/novo' => 'Trainer@newForm', 'POST /treinador/treinos/novo' => 'Trainer@create',
+            'GET /treinador' => 'Trainer@home', 'GET /treinador/modelos' => 'Templates@index', 'GET /treinador/modelos/novo' => 'Templates@newForm',
+            'POST /treinador/modelos/novo' => 'Templates@create', 'GET /treinador/modelos/aplicar' => 'Templates@applyForm', 'POST /treinador/modelos/aplicar' => 'Templates@applySave',
+            'GET /treinador/treinos/novo' => 'Trainer@newForm', 'POST /treinador/treinos/novo' => 'Trainer@create',
             'GET /admin' => 'adminHome',
             'GET /termos' => 'terms', 'GET /privacidade' => 'privacy',
         ];
@@ -54,6 +56,8 @@ final class App
             ['GET', '#^/treinador/atletas/(\d+)$#', 'Trainer@athlete'],
             ['GET', '#^/treinador/treinos/(\d+)$#', 'Trainer@edit'],
             ['POST', '#^/treinador/treinos/(\d+)$#', 'Trainer@update'],
+            ['GET', '#^/treinador/modelos/(\d+)$#', 'Templates@edit'],
+            ['POST', '#^/treinador/modelos/(\d+)$#', 'Templates@update'],
         ] as [$mt, $re, $target]) {
             if ($method === $mt && preg_match($re, $path, $m)) {
                 [$cls, $fn] = explode('@', $target);

@@ -11,6 +11,7 @@ $badge = ['draft' => 'badge--draft', 'published' => 'badge--ok', 'cancelled' => 
 		<?php foreach ($mods as $m): ?>
 			<a class="btn btn--sm" href="/treinador/treinos/novo?atleta=<?= (int) $athlete['id'] ?>&amp;modalidade=<?= e($m) ?>">+ <?= e($modNames[$m] ?? $m) ?></a>
 		<?php endforeach; ?>
+		<a class="btn btn--sm btn--ghost" href="/treinador/modelos/aplicar">Aplicar um modelo</a>
 	</p>
 </section>
 

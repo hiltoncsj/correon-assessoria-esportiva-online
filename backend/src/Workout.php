@@ -44,8 +44,9 @@ final class Workout
     public static function find(int $id): ?array
     {
         return Db::one(
-            'SELECT w.*, m.slug AS modality, m.name AS modality_name, a.name AS athlete_name
-             FROM workouts w JOIN modalities m ON m.id = w.modality_id JOIN users a ON a.id = w.athlete_id WHERE w.id = ?',
+            'SELECT w.*, m.slug AS modality, m.name AS modality_name, a.name AS athlete_name, t.name AS template_name
+             FROM workouts w JOIN modalities m ON m.id = w.modality_id JOIN users a ON a.id = w.athlete_id
+             LEFT JOIN workout_templates t ON t.id = w.source_template_id WHERE w.id = ?',
             [$id]
         );
     }

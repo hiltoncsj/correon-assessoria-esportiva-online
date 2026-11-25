@@ -1,6 +1,8 @@
 <?php /** @var string $inner @var string $active */
 $items = [
 	'home' => ['/treinador', 'Meus atletas'],
+	'modelos' => ['/treinador/modelos', 'Modelos de treino'],
+	'aplicar' => ['/treinador/modelos/aplicar', 'Aplicar modelos'],
 ];
 ?>
 <div class="shell">

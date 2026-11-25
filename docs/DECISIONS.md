@@ -39,3 +39,11 @@ Perguntas de produto não respondidas pelo cliente; adotei estes padrões (revis
 - **Registro só a partir do dia do treino**; não aceita data futura.
 - **Calendário:** lista por mês (sem grade mensal ainda). Perfil do atleta para o treinador (objetivo, histórico, emergência) fica para a Sprint 4, com regra de privacidade.
 - **Fora desta sprint:** notificações ao atleta quando o treino é publicado/alterado; modelos/biblioteca de treinos; duplicar treino; visão do admin sobre treinos (Sprint 5).
+
+## 2026-11-25 — Sprint 3, ajuste: modelos de treino
+- **Biblioteca de modelos por treinador** (`workout_templates` + `workout_template_items`): "Treino 1", "Treino 2"… Privados ao treinador que criou (outro treinador recebe 404). Um modelo tem uma modalidade e uma disciplina e exige pelo menos uma linha.
+- **Aplicar modelos** (`/treinador/modelos/aplicar`): o treinador escolhe a data e, para cada atleta vinculado à modalidade, qual modelo ele recebe (ou "não aplicar"); pode publicar na hora ou salvar como rascunho. Validado no servidor (atleta vinculado, modelo próprio/ativo/da modalidade); se qualquer seleção for inválida, nada é criado.
+- **Cópia independente:** cada atleta recebe uma linha em `workouts` (com `source_template_id`) e cópia das linhas. Editar um treino de um atleta não altera o modelo nem os outros atletas; editar o modelo não altera treinos já entregues (preserva o histórico). As regras da Sprint 3 continuam (versões, bloqueio após registro do atleta).
+- **Anti-duplicidade:** reaplicar o mesmo modelo ao mesmo atleta na mesma data é ignorado (e informado).
+- **Modelos não são excluídos, só arquivados** (treinos aplicados referenciam o modelo).
+- **Em aberto (perguntar ao cliente):** o modelo é uma sessão única. Se "Treino 1..4" forem semanas ou ciclos com vários dias, é preciso um modelo "multi-dia" e aplicação em calendário. Também: atleta ter um "treino padrão" persistente (nível) em vez de escolher a cada aplicação.
