@@ -37,14 +37,29 @@ final class App
             'POST /sair' => 'logout',
             'GET /app' => 'Athlete@dashboard', 'GET /app/perfil' => 'Athlete@profileForm', 'POST /app/perfil' => 'Athlete@profileSave',
             'GET /app/senha' => 'Athlete@passwordForm', 'POST /app/senha' => 'Athlete@passwordSave',
-            'GET /app/modalidades' => 'soon:modalidades', 'GET /app/treinos' => 'soon:treinos',
-            'GET /app/treinador' => 'soon:treinador', 'GET /app/assinaturas' => 'soon:assinaturas',
-            'GET /treinador' => 'trainerHome', 'GET /admin' => 'adminHome',
+            'GET /app/modalidades' => 'soon:modalidades', 'GET /app/treinos' => 'Athlete@workouts',
+            'GET /app/treinador' => 'Athlete@trainers', 'GET /app/assinaturas' => 'soon:assinaturas',
+            'GET /treinador' => 'Trainer@home', 'GET /treinador/treinos/novo' => 'Trainer@newForm', 'POST /treinador/treinos/novo' => 'Trainer@create',
+            'GET /admin' => 'adminHome',
             'GET /termos' => 'terms', 'GET /privacidade' => 'privacy',
         ];
         if (preg_match('#^/redefinir-senha/([0-9a-f]{64})$#', $path, $m)) {
             $method === 'GET' ? self::resetForm($m[1]) : ($method === 'POST' ? self::reset($m[1]) : self::notFound());
             return;
+        }
+        // Rotas com id numérico: [método, padrão, Classe@método]
+        foreach ([
+            ['GET', '#^/app/treinos/(\d+)$#', 'Athlete@workout'],
+            ['POST', '#^/app/treinos/(\d+)/registro$#', 'Athlete@logSave'],
+            ['GET', '#^/treinador/atletas/(\d+)$#', 'Trainer@athlete'],
+            ['GET', '#^/treinador/treinos/(\d+)$#', 'Trainer@edit'],
+            ['POST', '#^/treinador/treinos/(\d+)$#', 'Trainer@update'],
+        ] as [$mt, $re, $target]) {
+            if ($method === $mt && preg_match($re, $path, $m)) {
+                [$cls, $fn] = explode('@', $target);
+                $class = __NAMESPACE__ . '\\' . $cls;
+                $class::$fn((int) $m[1]);
+            }
         }
         $h = $routes["$method $path"] ?? null;
         if ($h === null) {
@@ -61,7 +76,7 @@ final class App
         self::$h();
     }
 
-    private static function notFound(): never
+    public static function notFound(): never
     {
         View::render('errors/error', ['title' => 'Não encontrado', 'code' => 404, 'msg' => 'Página não encontrada.'], 404);
     }
@@ -274,13 +289,6 @@ final class App
     }
 
     // ---- Áreas por perfil (esqueleto da Sprint 1; conteúdo real nas próximas sprints) ----
-
-    private static function trainerHome(): never
-    {
-        $u = self::require('trainer');
-        View::render('dash/area', ['title' => 'Painel do treinador', 'heading' => 'Painel do treinador', 'role' => 'Treinador', 'u' => $u,
-            'note' => 'A carteira de atletas e a prescrição de treinos serão liberadas nas próximas etapas.']);
-    }
 
     private static function adminHome(): never
     {

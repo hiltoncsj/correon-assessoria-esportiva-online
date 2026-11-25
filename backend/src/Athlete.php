@@ -10,22 +10,178 @@ final class Athlete
     /** Seções futuras: título, descrição do que vai aparecer e sprint prevista. */
     public const SOON = [
         'modalidades' => ['Minhas modalidades', 'Aqui aparecerão as modalidades contratadas (Corrida, Triathlon, Musculação) e a periodicidade de cada uma.'],
-        'treinos' => ['Meus treinos', 'Aqui aparecerão os treinos publicados pelo seu treinador, o calendário e o registro dos treinos realizados.'],
-        'treinador' => ['Meu treinador', 'Aqui aparecerão os dados do treinador responsável por você em cada modalidade.'],
         'assinaturas' => ['Assinaturas e pagamentos', 'Aqui aparecerão seus contratos, a situação de cada assinatura e o histórico de pagamentos.'],
     ];
 
     public static function dashboard(): never
     {
         $u = App::require('athlete');
-        $profile = self::profile((int) $u['id']);
-        $meta = Db::one('SELECT created_at, last_login_at FROM users WHERE id = ?', [$u['id']]) ?? [];
-        // Modalidades, treinos, treinador e assinatura ainda não têm tabelas (Sprints 3, 4 e 6):
-        // por isso a tela mostra o estado vazio real, sem números.
+        $id = (int) $u['id'];
+        $profile = self::profile($id);
+        $meta = Db::one('SELECT created_at, last_login_at FROM users WHERE id = ?', [$id]) ?? [];
+        $next = Db::all(
+            "SELECT w.id, w.title, w.scheduled_date, w.discipline, m.name AS modality
+             FROM workouts w JOIN modalities m ON m.id = w.modality_id LEFT JOIN workout_logs l ON l.workout_id = w.id
+             WHERE w.athlete_id = ? AND w.status = 'published' AND w.scheduled_date >= CURDATE() AND l.id IS NULL
+             ORDER BY w.scheduled_date, w.id LIMIT 3",
+            [$id]
+        );
+        $stats = Db::one(
+            "SELECT
+               (SELECT COUNT(*) FROM workouts w LEFT JOIN workout_logs l ON l.workout_id = w.id
+                  WHERE w.athlete_id = ? AND w.status = 'published' AND w.scheduled_date >= CURDATE() AND l.id IS NULL) AS upcoming,
+               (SELECT COUNT(*) FROM workout_logs WHERE athlete_id = ? AND outcome IN ('completed','partial')) AS done",
+            [$id, $id]
+        ) ?? ['upcoming' => 0, 'done' => 0];
+        // Modalidades ativas e assinatura dependem de contratos (Sprint 6): seguem em estado vazio.
         View::render('athlete/dashboard', [
             'title' => 'Minha área', 'shell' => 'athlete', 'active' => 'home',
             'u' => $u, 'meta' => $meta, 'completeness' => self::completeness($profile),
+            'next' => $next, 'stats' => $stats, 'trainers' => self::trainerLinks($id),
         ]);
+    }
+
+    /** @return list<array<string,mixed>> */
+    private static function trainerLinks(int $athleteId): array
+    {
+        return Db::all(
+            "SELECT t.name AS trainer, m.name AS modality FROM trainer_athletes ta
+             JOIN users t ON t.id = ta.trainer_id JOIN modalities m ON m.id = ta.modality_id
+             WHERE ta.athlete_id = ? AND ta.status = 'active' ORDER BY m.id, t.name",
+            [$athleteId]
+        );
+    }
+
+    public static function trainers(): never
+    {
+        $u = App::require('athlete');
+        View::render('athlete/trainers', ['title' => 'Meu treinador', 'shell' => 'athlete', 'active' => 'treinador',
+            'links' => self::trainerLinks((int) $u['id'])]);
+    }
+
+    /** Treinos publicados do mês (?mes=AAAA-MM). */
+    public static function workouts(): never
+    {
+        $u = App::require('athlete');
+        $mes = (string) ($_GET['mes'] ?? date('Y-m'));
+        if (!preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $mes)) {
+            $mes = date('Y-m');
+        }
+        $first = new \DateTimeImmutable($mes . '-01');
+        $rows = Db::all(
+            "SELECT w.id, w.title, w.scheduled_date, w.discipline, m.name AS modality, l.outcome
+             FROM workouts w JOIN modalities m ON m.id = w.modality_id LEFT JOIN workout_logs l ON l.workout_id = w.id
+             WHERE w.athlete_id = ? AND w.status = 'published' AND w.scheduled_date BETWEEN ? AND ?
+             ORDER BY w.scheduled_date, w.id",
+            [$u['id'], $first->format('Y-m-d'), $first->modify('last day of this month')->format('Y-m-d')]
+        );
+        $meses = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+        View::render('athlete/workouts', [
+            'title' => 'Meus treinos', 'shell' => 'athlete', 'active' => 'treinos', 'rows' => $rows,
+            'monthLabel' => $meses[(int) $first->format('n') - 1] . ' de ' . $first->format('Y'),
+            'prev' => $first->modify('-1 month')->format('Y-m'), 'next' => $first->modify('+1 month')->format('Y-m'),
+        ]);
+    }
+
+    /** Treino publicado do próprio atleta; qualquer outro caso = 404. @return array<string,mixed> */
+    private static function ownPublished(array $u, int $id): array
+    {
+        $w = Workout::find($id);
+        if (!$w || (int) $w['athlete_id'] !== (int) $u['id'] || $w['status'] !== 'published') {
+            App::notFound();
+        }
+        return $w;
+    }
+
+    /** @param array<string,string> $errors @param array<string,mixed> $old */
+    public static function workout(int $id, array $errors = [], array $old = [], int $status = 200): never
+    {
+        $u = App::require('athlete');
+        $w = self::ownPublished($u, $id);
+        $log = Workout::log($id);
+        View::render('athlete/workout', [
+            'title' => $w['title'], 'shell' => 'athlete', 'active' => 'treinos', 'w' => $w,
+            'items' => Workout::items($id), 'log' => $log, 'errors' => $errors,
+            'old' => $old ?: ($log ?: []), 'canLog' => $w['scheduled_date'] <= date('Y-m-d'),
+        ], $status);
+    }
+
+    public static function logSave(int $id): never
+    {
+        $u = App::require('athlete');
+        $w = self::ownPublished($u, $id);
+        if ($w['scheduled_date'] > date('Y-m-d')) {
+            Http::flash('err', 'Você só pode registrar o treino a partir do dia dele.');
+            Http::redirect('/app/treinos/' . $id);
+        }
+        $in = [];
+        foreach (['outcome', 'performed_on', 'duration_minutes', 'distance_km', 'effort', 'notes'] as $k) {
+            $in[$k] = Http::input($k);
+        }
+        $errors = [];
+        if (!isset(Workout::OUTCOMES[$in['outcome']])) {
+            $errors['outcome'] = 'Escolha como foi o treino.';
+        }
+        $d = \DateTimeImmutable::createFromFormat('!Y-m-d', $in['performed_on']);
+        if (!$d || $d->format('Y-m-d') !== $in['performed_on'] || $in['performed_on'] > date('Y-m-d')
+            || $d < (new \DateTimeImmutable($w['scheduled_date']))->modify('-30 days')) {
+            $errors['performed_on'] = 'Data inválida (não pode ser futura).';
+        }
+        $skipped = $in['outcome'] === 'skipped';
+        $dur = $dist = $eff = null;
+        if (!$skipped) {
+            if ($in['duration_minutes'] !== '') {
+                if (!ctype_digit($in['duration_minutes']) || (int) $in['duration_minutes'] < 1 || (int) $in['duration_minutes'] > 1440) {
+                    $errors['duration_minutes'] = 'Duração entre 1 e 1440 minutos.';
+                } else {
+                    $dur = (int) $in['duration_minutes'];
+                }
+            }
+            if ($in['distance_km'] !== '' && !Workout::isStrength($w['discipline'])) {
+                $km = str_replace(',', '.', $in['distance_km']);
+                if (!preg_match('/^\d{1,4}(\.\d{1,2})?$/', $km) || (float) $km <= 0) {
+                    $errors['distance_km'] = 'Distância inválida (km, ex.: 5 ou 5,5).';
+                } else {
+                    $dist = $km;
+                }
+            }
+            if ($in['effort'] !== '') {
+                if (!ctype_digit($in['effort']) || (int) $in['effort'] < 1 || (int) $in['effort'] > 10) {
+                    $errors['effort'] = 'Esforço percebido de 1 a 10.';
+                } else {
+                    $eff = (int) $in['effort'];
+                }
+            }
+        }
+        if (mb_strlen($in['notes']) > 500) {
+            $errors['notes'] = 'Máximo de 500 caracteres.';
+        }
+        if ($errors) {
+            self::workout($id, $errors, $in, 422);
+        }
+
+        $pdo = Db::pdo();
+        $pdo->beginTransaction();
+        try {
+            $existing = Workout::log($id);
+            if ($existing) { // preserva a versão anterior do registro
+                Db::run('INSERT INTO workout_log_revisions (log_id, snapshot) VALUES (?,?)', [$existing['id'], json_encode($existing, JSON_UNESCAPED_UNICODE)]);
+            }
+            Db::run(
+                'INSERT INTO workout_logs (workout_id, athlete_id, outcome, performed_on, duration_minutes, distance_km, effort, notes)
+                 VALUES (?,?,?,?,?,?,?,?)
+                 ON DUPLICATE KEY UPDATE outcome=VALUES(outcome), performed_on=VALUES(performed_on), duration_minutes=VALUES(duration_minutes),
+                   distance_km=VALUES(distance_km), effort=VALUES(effort), notes=VALUES(notes)',
+                [$id, $u['id'], $in['outcome'], $in['performed_on'], $dur, $dist, $eff, $in['notes'] === '' ? null : $in['notes']]
+            );
+            $pdo->commit();
+        } catch (\Throwable $e) {
+            $pdo->rollBack();
+            throw $e;
+        }
+        Audit::log($existing ? 'workout_log_updated' : 'workout_logged', (int) $u['id'], 'workout', $id);
+        Http::flash('ok', 'Registro salvo.');
+        Http::redirect('/app/treinos/' . $id);
     }
 
     public static function soon(string $section): never

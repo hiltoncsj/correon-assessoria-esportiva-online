@@ -26,3 +26,16 @@
 - `users.session_version`: trocar ou redefinir a senha incrementa a versão e desconecta as demais sessões (fecha a limitação registrada na Sprint 1).
 - Alterar e-mail não está disponível (decisão futura: exige reconfirmação).
 - Alterar senha (logado) NÃO pede a senha atual, por decisão do cliente. Risco aceito: quem tiver uma sessão aberta (aparelho emprestado/roubado) pode trocar a senha e tomar a conta. Compensações: limite de 5 trocas/15 min, desconexão das demais sessões, auditoria `password_changed` e aviso por e-mail ao dono da conta.
+
+## 2026-11-25 — Sprint 3 (prescrição e gestão de treinos)
+Perguntas de produto não respondidas pelo cliente; adotei estes padrões (revisar):
+- **Disciplinas:** Corrida → corrida; Musculação → musculação; Triathlon → natação, ciclismo ou corrida (um treino = uma disciplina).
+- **Treino estruturado em linhas:** resistência = etapa, duração (min), distância (km), alvo (ritmo/zona), observação; musculação = exercício, séries, repetições, carga, intervalo (s), observação. Máx. 40 linhas. Texto livre só em "orientações gerais".
+- **Vínculo treinador↔atleta por modalidade** (`trainer_athletes`), atribuído por `backend/bin/assign-trainer.php` até a tela de admin (Sprint 5). Sem contratos (Sprint 6), o vínculo é o que define a modalidade do atleta.
+- **Autorização:** treinador só vê atleta/treino com vínculo ATIVO na modalidade; sem vínculo = 404 (não revela existência). Encerrar o vínculo remove o acesso do treinador, mas o histórico fica com o atleta.
+- **Ciclo do treino:** rascunho → publicado (atleta só vê publicado) → cancelado. "Voltar a rascunho" e cancelar só sem registro do atleta.
+- **Versionamento:** toda criação/alteração/publicação grava uma foto completa (JSON) em `workout_versions`, com autor e data. Edição simultânea é detectada por número de versão (conflito = recusa).
+- **Planejado × realizado separados:** `workout_logs` (um por treino). Depois que o atleta registra, o treinador não pode mais alterar nem cancelar aquele treino. O atleta pode corrigir o próprio registro; a versão anterior vai para `workout_log_revisions`.
+- **Registro só a partir do dia do treino**; não aceita data futura.
+- **Calendário:** lista por mês (sem grade mensal ainda). Perfil do atleta para o treinador (objetivo, histórico, emergência) fica para a Sprint 4, com regra de privacidade.
+- **Fora desta sprint:** notificações ao atleta quando o treino é publicado/alterado; modelos/biblioteca de treinos; duplicar treino; visão do admin sobre treinos (Sprint 5).

@@ -20,7 +20,7 @@ if (!str_ends_with((string) Correon\Env::get('DB_NAME'), '_test')) {
 $php = PHP_BINARY;
 $pdo = Db::pdo();
 $pdo->exec('SET FOREIGN_KEY_CHECKS=0');
-foreach (['athlete_profiles', 'audit_log', 'consents', 'password_resets', 'rate_events', 'user_roles', 'users', 'schema_migrations'] as $t) {
+foreach (['workout_log_revisions', 'workout_logs', 'workout_versions', 'workout_items', 'workouts', 'trainer_athletes', 'modalities', 'athlete_profiles', 'audit_log', 'consents', 'password_resets', 'rate_events', 'user_roles', 'users', 'schema_migrations'] as $t) {
     $pdo->exec("DROP TABLE IF EXISTS $t"); // somente no banco de teste
 }
 $pdo->exec('DROP TABLE IF EXISTS roles');
@@ -310,6 +310,190 @@ preg_match('#/redefinir-senha/([0-9a-f]{64})#', (string) file_get_contents($mail
 $ses4->post("/redefinir-senha/{$mm[1]}", ['password' => 'final-senha-77777', 'password2' => 'final-senha-77777'], "/redefinir-senha/{$mm[1]}");
 [$s] = $ses3->req('GET', '/app');
 check('redefinição por e-mail também desconecta sessões abertas', $s === 303);
+
+echo "Sprint 3 — treinos\n";
+$cli = static function (string $script, array $args) use ($php): int {
+    exec(escapeshellarg($php) . ' ' . escapeshellarg(__DIR__ . "/../bin/$script") . ' ' . implode(' ', array_map('escapeshellarg', $args)), $o, $c);
+    return $c;
+};
+putenv('CORREON_NEW_PASSWORD=senha-staff-12345');
+$cli('create-user.php', ['trainer', 'Treinador Dois', 'trn2@example.com']);
+$uid = static fn (string $email): int => (int) Db::one('SELECT id FROM users WHERE email = ?', [$email])['id'];
+$mariaId = $uid('maria@example.com'); $joaoId = $uid('joao@example.com');
+check('CLI vincula treinador a atleta (corrida)', $cli('assign-trainer.php', ['assign', 'trn@example.com', 'maria@example.com', 'corrida']) === 0);
+check('CLI vincula treinador 2 a João (musculação)', $cli('assign-trainer.php', ['assign', 'trn2@example.com', 'joao@example.com', 'musculacao']) === 0);
+check('CLI recusa perfil errado (atleta como treinador)', $cli('assign-trainer.php', ['assign', 'maria@example.com', 'joao@example.com', 'corrida']) !== 0);
+
+Db::run('DELETE FROM rate_events');
+$tr1 = new Client(); $tr1->post('/entrar', ['email' => 'trn@example.com', 'password' => 'senha-staff-12345']);
+$tr2 = new Client(); $tr2->post('/entrar', ['email' => 'trn2@example.com', 'password' => 'senha-staff-12345']);
+$mar = new Client(); $mar->post('/entrar', ['email' => 'maria@example.com', 'password' => 'final-senha-77777']);
+$joa = new Client(); $joa->post('/entrar', ['email' => 'joao@example.com', 'password' => 'senha-forte-123']);
+
+[$s, $b] = $tr1->req('GET', '/treinador');
+check('treinador vê a própria carteira', $s === 200 && str_contains($b, 'Maria') && !str_contains($b, 'João Outro'));
+[$s] = $tr2->req('GET', "/treinador/atletas/$mariaId");
+check('treinador sem vínculo NÃO acessa atleta alheio (404)', $s === 404);
+[$s] = $tr1->req('GET', "/treinador/atletas/$joaoId");
+check('treinador 1 não acessa atleta do treinador 2 (404)', $s === 404);
+[$s] = $tr1->req('GET', "/treinador/atletas/$mariaId");
+check('treinador acessa atleta vinculado', $s === 200);
+[$s] = $tr1->req('GET', "/treinador/treinos/novo?atleta=$mariaId&modalidade=corrida");
+check('formulário de novo treino (corrida) = 200', $s === 200);
+[$s] = $tr1->req('GET', "/treinador/treinos/novo?atleta=$mariaId&modalidade=musculacao");
+check('modalidade sem vínculo = 404', $s === 404);
+[$s] = $mar->req('GET', "/treinador/treinos/novo?atleta=$mariaId&modalidade=corrida");
+check('atleta no painel do treinador = 403', $s === 403);
+[$s] = $adm->req('GET', '/treinador');
+check('admin no painel do treinador = 403', $s === 403);
+[$s] = $anon->req('POST', '/treinador/treinos/novo', ['title' => 'x']);
+check('POST de treino sem CSRF = 419', $s === 419);
+
+$yesterday = date('Y-m-d', strtotime('-1 day'));
+$tomorrow = date('Y-m-d', strtotime('+1 day'));
+$run = static fn (array $over = []) => $over + ['athlete_id' => $mariaId, 'modality' => 'corrida', 'title' => 'Rodagem <i>leve</i>',
+    'scheduled_date' => $yesterday, 'notes' => 'Controle o ritmo', 'action' => 'draft',
+    'items' => [['label' => 'Aquecimento', 'duration_minutes' => '10', 'target' => 'Z1'], ['label' => 'Principal', 'duration_minutes' => '30', 'distance_km' => '5,5', 'target' => '5:30/km']]];
+$form = "/treinador/treinos/novo?atleta=$mariaId&modalidade=corrida";
+foreach ([
+    'título vazio' => ['title' => ''],
+    'data inválida' => ['scheduled_date' => '2026-02-31'],
+    'duração inválida' => ['items' => [['label' => 'X', 'duration_minutes' => 'abc']]],
+    'distância inválida' => ['items' => [['label' => 'X', 'distance_km' => '-3']]],
+    'linha sem etapa' => ['items' => [['label' => '', 'duration_minutes' => '10']]],
+    'publicar sem linhas' => ['action' => 'publish', 'items' => []],
+] as $label => $over) {
+    [$s] = $tr1->post('/treinador/treinos/novo', $over + $run(), $form);
+    check("treino rejeita: $label (422)", $s === 422, "status=$s");
+}
+[$s] = $tr1->post('/treinador/treinos/novo', $run(['modality' => 'musculacao']), $form);
+check('criar treino em modalidade sem vínculo = 404', $s === 404);
+[$s] = $tr1->post('/treinador/treinos/novo', $run(), $form);
+$wid = (int) preg_replace('#.*/#', '', (string) $tr1->header('Location'));
+check('rascunho criado (303 para o treino)', $s === 303 && $wid > 0);
+$w = Db::one('SELECT * FROM workouts WHERE id = ?', [$wid]);
+check('rascunho: status draft, versão 1, discipline corrida', ($w['status'] ?? '') === 'draft' && (int) $w['version'] === 1 && $w['discipline'] === 'corrida');
+check('itens gravados (distância 5,5 → 5.50)', Db::one('SELECT distance_km d FROM workout_items WHERE workout_id = ? AND label = ?', [$wid, 'Principal'])['d'] === '5.50');
+
+[$s, $b] = $mar->req('GET', '/app/treinos?mes=' . substr($yesterday, 0, 7));
+check('atleta NÃO vê rascunho na lista', $s === 200 && !str_contains($b, 'Rodagem'));
+[$s] = $mar->req('GET', "/app/treinos/$wid");
+check('atleta NÃO abre rascunho (404)', $s === 404);
+[$s, $b] = $tr1->req('GET', "/treinador/treinos/$wid");
+check('treinador abre o treino; HTML do título escapado', $s === 200 && str_contains($b, '&lt;i&gt;leve') && !str_contains($b, '<i>leve</i>'));
+
+$upd = static fn (string $action, int $v, array $over = []) => $over + ['action' => $action, 'version' => (string) $v, 'title' => 'Rodagem <i>leve</i>',
+    'scheduled_date' => $yesterday, 'notes' => 'Controle o ritmo',
+    'items' => [['label' => 'Aquecimento', 'duration_minutes' => '10'], ['label' => 'Principal', 'duration_minutes' => '30', 'distance_km' => '5']]];
+[$s] = $tr2->post("/treinador/treinos/$wid", $upd('publish', 1), "/treinador/atletas/$joaoId");
+check('treinador sem vínculo não altera treino alheio (404)', $s === 404);
+[$s] = $tr1->post("/treinador/treinos/$wid", $upd('publish', 1), "/treinador/treinos/$wid");
+check('publicar treino', $s === 303);
+$w = Db::one('SELECT status, version FROM workouts WHERE id = ?', [$wid]);
+check('status published, versão 2', $w['status'] === 'published' && (int) $w['version'] === 2);
+check('histórico guarda 2 versões (criado, publicado)', (int) Db::one('SELECT COUNT(*) c FROM workout_versions WHERE workout_id = ?', [$wid])['c'] === 2);
+[$s] = $tr1->post("/treinador/treinos/$wid", $upd('save', 1, ['title' => 'Título desatualizado']), "/treinador/treinos/$wid");
+check('edição com versão antiga é recusada (conflito)', $s === 303 && Db::one('SELECT title FROM workouts WHERE id = ?', [$wid])['title'] === 'Rodagem <i>leve</i>'
+    && (int) Db::one('SELECT version v FROM workouts WHERE id = ?', [$wid])['v'] === 2);
+
+[$s, $b] = $mar->req('GET', '/app/treinos?mes=' . substr($yesterday, 0, 7));
+check('atleta vê treino publicado na lista (título escapado)', $s === 200 && str_contains($b, 'Rodagem &lt;i&gt;leve') && str_contains($b, 'Sem registro'));
+[$s, $b] = $mar->req('GET', "/app/treinos/$wid");
+check('atleta abre o treino e vê as etapas', $s === 200 && str_contains($b, 'Aquecimento') && str_contains($b, '5 km'));
+[$s] = $joa->req('GET', "/app/treinos/$wid");
+check('outro atleta NÃO abre o treino (404)', $s === 404);
+[$s] = $joa->post("/app/treinos/$wid/registro", ['outcome' => 'completed', 'performed_on' => $yesterday], '/app/treinos');
+check('outro atleta NÃO registra treino alheio (404)', $s === 404);
+[$s] = $tr2->req('GET', "/treinador/treinos/$wid");
+check('treinador sem vínculo NÃO abre o treino (404)', $s === 404);
+
+echo "Registro do treino realizado\n";
+$log = static fn (array $over = []) => $over + ['outcome' => 'completed', 'performed_on' => $yesterday, 'duration_minutes' => '42', 'distance_km' => '6,2', 'effort' => '7', 'notes' => 'Foi bem <b>mesmo</b>'];
+foreach (['esforço 11' => ['effort' => '11'], 'duração 0' => ['duration_minutes' => '0'], 'data futura' => ['performed_on' => $tomorrow],
+    'resultado inválido' => ['outcome' => 'x'], 'distância inválida' => ['distance_km' => 'abc']] as $label => $over) {
+    [$s] = $mar->post("/app/treinos/$wid/registro", $log($over), "/app/treinos/$wid");
+    check("registro rejeita: $label (422)", $s === 422, "status=$s");
+}
+[$s] = $mar->post("/app/treinos/$wid/registro", $log(), "/app/treinos/$wid");
+check('atleta registra o treino realizado', $s === 303);
+$l = Db::one('SELECT * FROM workout_logs WHERE workout_id = ?', [$wid]);
+check('registro gravado separado do planejado', $l && $l['outcome'] === 'completed' && $l['distance_km'] === '6.20' && (int) $l['effort'] === 7);
+check('planejado não foi alterado pelo registro', Db::one('SELECT title FROM workouts WHERE id = ?', [$wid])['title'] === 'Rodagem <i>leve</i>');
+[$s, $b] = $mar->req('GET', "/app/treinos/$wid");
+check('comentário do registro escapado (XSS)', !str_contains($b, '<b>mesmo</b>') && str_contains($b, '&lt;b&gt;mesmo'));
+[$s, $b] = $tr1->req('GET', "/treinador/treinos/$wid");
+check('treinador vê o registro do atleta', str_contains($b, 'Registro do atleta') && str_contains($b, '6,2 km'));
+[$s] = $tr1->post("/treinador/treinos/$wid", $upd('save', 2, ['title' => 'Tentando alterar']), "/treinador/treinos/$wid");
+check('treino já realizado NÃO pode ser alterado pelo treinador', Db::one('SELECT title FROM workouts WHERE id = ?', [$wid])['title'] === 'Rodagem <i>leve</i>');
+[$s] = $tr1->post("/treinador/treinos/$wid", $upd('cancel', 2), "/treinador/treinos/$wid");
+check('treino já realizado NÃO pode ser cancelado', Db::one('SELECT status FROM workouts WHERE id = ?', [$wid])['status'] === 'published');
+[$s] = $mar->post("/app/treinos/$wid/registro", $log(['outcome' => 'partial', 'duration_minutes' => '30']), "/app/treinos/$wid");
+check('atleta corrige o próprio registro', $s === 303 && Db::one('SELECT outcome FROM workout_logs WHERE workout_id = ?', [$wid])['outcome'] === 'partial');
+check('versão anterior do registro preservada (revisão)', (int) Db::one('SELECT COUNT(*) c FROM workout_log_revisions')['c'] === 1);
+
+echo "Treino futuro, cancelamento e vínculo encerrado\n";
+$fut = static fn (array $over = []) => $over + $run(['scheduled_date' => $tomorrow, 'title' => 'Longo de amanhã', 'action' => 'publish']);
+[$s] = $tr1->post('/treinador/treinos/novo', $fut(), $form);
+$fid = (int) preg_replace('#.*/#', '', (string) $tr1->header('Location'));
+check('treino futuro publicado direto', $s === 303 && Db::one('SELECT status FROM workouts WHERE id = ?', [$fid])['status'] === 'published');
+[$s] = $mar->post("/app/treinos/$fid/registro", $log(['performed_on' => $yesterday]), "/app/treinos/$fid");
+check('atleta não registra treino antes do dia dele', $s === 303 && !Db::one('SELECT id FROM workout_logs WHERE workout_id = ?', [$fid]));
+[$s, $b] = $mar->req('GET', '/app');
+check('dashboard mostra próximo treino e contadores reais', str_contains($b, 'Longo de amanhã') && str_contains($b, '1 treino(s) programado(s) · 1 realizado(s)'));
+check('dashboard mostra o treinador vinculado', str_contains($b, 'Staff trainer'));
+[$s, $b] = $mar->req('GET', '/app/treinador');
+check('/app/treinador lista o treinador real', $s === 200 && str_contains($b, 'Staff trainer') && str_contains($b, 'Corrida'));
+[$s] = $tr1->post("/treinador/treinos/$fid", ['action' => 'unpublish', 'version' => '1', 'title' => 'x', 'scheduled_date' => $tomorrow], "/treinador/treinos/$fid");
+[$s] = $mar->req('GET', "/app/treinos/$fid");
+check('treino despublicado some para o atleta (404)', $s === 404);
+[$s] = $tr1->post("/treinador/treinos/$fid", ['action' => 'cancel', 'version' => '2', 'title' => 'x', 'scheduled_date' => $tomorrow], "/treinador/treinos/$fid");
+check('treino cancelado', Db::one('SELECT status FROM workouts WHERE id = ?', [$fid])['status'] === 'cancelled');
+[$s] = $tr1->post("/treinador/treinos/$fid", $upd('publish', 3), "/treinador/treinos/$fid");
+check('treino cancelado não volta a ser editado', Db::one('SELECT status FROM workouts WHERE id = ?', [$fid])['status'] === 'cancelled');
+check('CLI encerra o vínculo', $cli('assign-trainer.php', ['end', 'trn@example.com', 'maria@example.com', 'corrida']) === 0);
+[$s] = $tr1->req('GET', "/treinador/treinos/$wid");
+check('vínculo encerrado: treinador perde o acesso (404)', $s === 404);
+[$s] = $tr1->req('GET', "/treinador/atletas/$mariaId");
+check('vínculo encerrado: perfil do atleta some (404)', $s === 404);
+[$s] = $mar->req('GET', "/app/treinos/$wid");
+check('vínculo encerrado: atleta mantém o histórico', $s === 200);
+
+echo "Musculação\n";
+$strength = static fn (array $over = []) => $over + ['athlete_id' => $joaoId, 'modality' => 'musculacao', 'title' => 'Treino A', 'scheduled_date' => $yesterday,
+    'notes' => '', 'action' => 'publish', 'items' => [['label' => 'Supino reto', 'sets' => '4', 'reps' => '8-10', 'load_text' => '40 kg', 'rest_seconds' => '90'],
+    ['label' => 'Remada curvada', 'sets' => '3', 'reps' => '12', 'load_text' => '30 kg', 'rest_seconds' => '60']]];
+$sform = "/treinador/treinos/novo?atleta=$joaoId&modalidade=musculacao";
+[$s] = $tr2->post('/treinador/treinos/novo', $strength(['items' => [['label' => 'Supino', 'sets' => '0']]]), $sform);
+check('séries inválidas rejeitadas (422)', $s === 422);
+[$s] = $tr2->post('/treinador/treinos/novo', $strength(['items' => [['label' => 'Supino', 'rest_seconds' => '99999']]]), $sform);
+check('intervalo inválido rejeitado (422)', $s === 422);
+[$s] = $tr2->post('/treinador/treinos/novo', $strength(), $sform);
+$sid = (int) preg_replace('#.*/#', '', (string) $tr2->header('Location'));
+check('treino de musculação publicado', $s === 303 && $sid > 0 && Db::one('SELECT discipline d FROM workouts WHERE id = ?', [$sid])['d'] === 'musculacao');
+[$s, $b] = $joa->req('GET', "/app/treinos/$sid");
+check('atleta vê exercícios, séries, repetições e carga', $s === 200 && str_contains($b, 'Supino reto') && str_contains($b, '8-10') && str_contains($b, '40 kg') && str_contains($b, '90 s'));
+check('musculação não pede distância no registro', !str_contains($b, 'name="distance_km"'));
+[$s] = $tr1->req('GET', "/treinador/treinos/$sid");
+check('treinador de corrida NÃO abre treino de musculação (404)', $s === 404);
+
+echo "Triathlon\n";
+$cli('create-user.php', ['trainer', 'Treinador Tri', 'tri@example.com']);
+$cli('assign-trainer.php', ['assign', 'tri@example.com', 'joao@example.com', 'triathlon']);
+Db::run('DELETE FROM rate_events');
+$tri = new Client(); $tri->post('/entrar', ['email' => 'tri@example.com', 'password' => 'senha-staff-12345']);
+$tform = "/treinador/treinos/novo?atleta=$joaoId&modalidade=triathlon";
+[$s, $b] = $tri->req('GET', $tform);
+check('triathlon oferece natação, ciclismo e corrida', $s === 200 && str_contains($b, 'Natação') && str_contains($b, 'Ciclismo') && str_contains($b, 'Corrida'));
+$tp = ['athlete_id' => $joaoId, 'modality' => 'triathlon', 'title' => 'Pedal base', 'scheduled_date' => $tomorrow, 'notes' => '', 'action' => 'publish',
+    'discipline' => 'ciclismo', 'items' => [['label' => 'Z2 contínuo', 'duration_minutes' => '90', 'distance_km' => '40']]];
+[$s] = $tri->post('/treinador/treinos/novo', ['discipline' => 'musculacao'] + $tp, $tform);
+check('triathlon rejeita disciplina de musculação (422)', $s === 422);
+[$s] = $tri->post('/treinador/treinos/novo', $tp, $tform);
+check('treino de ciclismo criado no triathlon', $s === 303 && Db::one("SELECT COUNT(*) c FROM workouts WHERE discipline = 'ciclismo'")['c'] == 1);
+
+echo "Auditoria do treino\n";
+check('ações de treino auditadas', (int) Db::one("SELECT COUNT(*) c FROM audit_log WHERE action IN ('workout_created','workout_published','workout_updated','workout_cancelled','workout_logged','workout_log_updated')")['c'] >= 5);
+check('histórico de versões guarda foto completa', str_contains((string) Db::one('SELECT snapshot s FROM workout_versions WHERE workout_id = ? AND version = 2', [$wid])['s'], 'Aquecimento'));
 
 echo "\nResultado: $pass ok, $fail falha(s)\n";
 exit($fail ? 1 : 0);

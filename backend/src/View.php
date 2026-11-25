@@ -9,6 +9,17 @@ final class View
         return htmlspecialchars((string) $s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
     }
 
+    /** 2026-11-25 -> "qua, 25/11/2026" */
+    public static function dateBr(?string $ymd, bool $weekday = true): string
+    {
+        if (!$ymd) {
+            return '—';
+        }
+        $t = strtotime($ymd);
+        $dias = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+        return ($weekday ? $dias[(int) date('w', $t)] . ', ' : '') . date('d/m/Y', $t);
+    }
+
     /** @param array<string,mixed> $vars */
     public static function render(string $view, array $vars = [], int $status = 200): never
     {
