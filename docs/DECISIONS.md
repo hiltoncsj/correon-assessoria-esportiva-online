@@ -123,3 +123,4 @@ Aplicado na Hero 6 (`src/data/plans.ts`). **Premissas a confirmar:** (1) valores
 - **Combo** (Corrida ou Triathlon + Musculação): **15%** sobre a soma, em todos os períodos: mensal R$ 306, trimestral R$ 816, semestral R$ 1.428, anual R$ 2.448. **Substitui o combo mensal de R$ 200.** No site vale quando as duas modalidades estão no mesmo período.
 - **Desconto por período** exibido em relação ao mensal, com 2 casas: trimestral 11,11%, semestral 22,22%, anual 33,33%.
 - Aplicado em `src/data/plans.ts` (site) e na tabela `plan_prices` (migração 0011). Contratos existentes não mudam.
+- Confirmado pelo cliente: no **combo**, o desconto exibido é em relação ao **mensal sem combo** (R$ 360/mês): mensal 15,00%, trimestral 24,44%, semestral 33,89%, anual 43,33%. Preços do combo não mudam.

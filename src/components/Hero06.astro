@@ -3,7 +3,7 @@ import { Image } from 'astro:assets';
 import imgCorrida from '../assets/PlanoCorrida.png';
 import imgTriathlon from '../assets/PlanoTriathlon.png';
 import imgMusculacao from '../assets/PlanoMusculacao.png';
-import { modalities, periods, prices, installments, months, bundles, bundleDiscountPct, exclusiveGroups, benefits, personalFormats } from '../data/plans';
+import { modalities, periods, prices, installments, months, bundles, exclusiveGroups, benefits, personalFormats } from '../data/plans';
 
 // Hero 06 — escolha de modalidade e periodicidade, com resumo da contratação.
 // Preços e regras comerciais vivem em src/data/plans.ts. Sem JS, os controles
@@ -44,7 +44,7 @@ const discount = (total: number, monthly: number | null, n: number): number =>
 	data-prices={JSON.stringify(prices)}
 	data-periods={JSON.stringify(periods)}
 	data-installments={JSON.stringify(installments)}
-	data-bundle-pct={bundleDiscountPct}
+	data-months={JSON.stringify(months)}
 	data-bundles={JSON.stringify(bundles)}
 	data-exclusive={JSON.stringify(exclusiveGroups)}
 >
@@ -140,7 +140,7 @@ const discount = (total: number, monthly: number | null, n: number): number =>
 							<span class="summary__total-value" data-total>{brl.format(0)}</span>
 						</p>
 						<p class="summary__saving" data-saving hidden>
-							<span class="summary__total-label">Desconto do plano combinado ({bundleDiscountPct}%)</span>
+							<span class="summary__total-label">Economia em relação ao mensal</span>
 							<span class="summary__saving-value" data-saving-value></span>
 						</p>
 						<a class="plan__cta" href="#contato" data-cta>CONTRATAR</a>
@@ -667,7 +667,8 @@ const discount = (total: number, monthly: number | null, n: number): number =>
 		);
 		const brl = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 		const parcels: Record<string, number> = JSON.parse(root.dataset.installments ?? '{}');
-		const bundlePct = Number(root.dataset.bundlePct ?? 0);
+		const monthsOf: Record<string, number> = JSON.parse(root.dataset.months ?? '{}');
+		const pct = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 		const mods = root.querySelectorAll<HTMLElement>('[data-mod]');
 		const list = root.querySelector<HTMLElement>('[data-lines]')!;
@@ -682,7 +683,7 @@ const discount = (total: number, monthly: number | null, n: number): number =>
 		const bundles: Bundle[] = JSON.parse(root.dataset.bundles ?? '[]');
 		const exclusive: string[][] = JSON.parse(root.dataset.exclusive ?? '[]');
 
-		// `original` = soma dos preços individuais (só nas combinações), para mostrar o desconto.
+		// `original` = quanto custaria pagar mês a mês, sem combo (só nas combinações), base do desconto.
 		type Line = {
 			ids: string[];
 			names: string[];
@@ -721,9 +722,9 @@ const discount = (total: number, monthly: number | null, n: number): number =>
 				const price = b.prices[period] ?? null;
 				if (price === null) return;
 				parts.forEach((p) => used.add(p.id));
-				const singles = parts.map((p) => prices[p.id]?.[period] ?? null);
-				const original = singles.every((v) => v !== null)
-					? (singles as number[]).reduce((a, v) => a + v, 0)
+				const monthly = parts.map((p) => prices[p.id]?.mensal ?? null);
+				const original = monthly.every((v) => v !== null)
+					? (monthly as number[]).reduce((a, v) => a + v, 0) * (monthsOf[period] ?? 1)
 					: undefined;
 				lines.push({ ids: b.modalities, names: parts.map((p) => p.name), period, price, combo: true, original });
 			});
@@ -735,6 +736,7 @@ const discount = (total: number, monthly: number | null, n: number): number =>
 			// 3) Desenha o resumo e o total.
 			let total = 0;
 			let saving = 0;
+			let reference = 0;
 			let invalid = false;
 			lines.forEach((l) => {
 				const li = document.createElement('li');
@@ -752,7 +754,7 @@ const discount = (total: number, monthly: number | null, n: number): number =>
 				} else {
 					total += l.price;
 					if (l.combo && l.original !== undefined && l.original > l.price) {
-						// Soma dos planos individuais riscada + preço do plano combinado
+						// Valor pagando mês a mês, riscado + preço do plano combinado
 						const was = document.createElement('s');
 						was.className = 'line__was';
 						was.textContent = brl.format(l.original);
@@ -772,15 +774,16 @@ const discount = (total: number, monthly: number | null, n: number): number =>
 				if (l.combo && l.original !== undefined && l.price !== null && l.original > l.price) {
 					const diff = l.original - l.price;
 					saving += diff;
+					reference += l.original;
 					const note = document.createElement('span');
 					note.className = 'line__note';
-					note.textContent = `Soma dos planos individuais: ${brl.format(l.original)} · Desconto do plano combinado (${bundlePct}%): ${brl.format(diff)}`;
+					note.textContent = `Pagando mês a mês: ${brl.format(l.original)} · ${pct.format((diff / l.original) * 100)}% de desconto em relação ao mensal: economia de ${brl.format(diff)}`;
 					li.append(note);
 				}
 				list.append(li);
 			});
 			savingEl.hidden = saving === 0;
-			savingValue.textContent = brl.format(saving);
+			savingValue.textContent = saving ? `${brl.format(saving)} (${pct.format((saving / reference) * 100)}%)` : '';
 
 			list.hidden = lines.length === 0;
 			empty.hidden = lines.length > 0;
