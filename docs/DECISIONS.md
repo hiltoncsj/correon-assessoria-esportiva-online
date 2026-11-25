@@ -118,3 +118,8 @@ Aplicado na Hero 6 (`src/data/plans.ts`). **Premissas a confirmar:** (1) valores
 - **Cancelamento:** motivo obrigatório; parcelas abertas canceladas; sem multa.
 - **Não implementado (regras/decisões pendentes):** gateway, cobrança recorrente e webhooks (tabela já tem `external_id` único para idempotência); contratação on-line pelo aluno; suspensão por inadimplência; multa/prazo mínimo; preços de Personal.
 - Nenhum dado de cartão é armazenado.
+
+## 2026-11-25 — Descontos definidos pelo cliente
+- **Combo** (Corrida ou Triathlon + Musculação): **15%** sobre a soma, em todos os períodos: mensal R$ 306, trimestral R$ 816, semestral R$ 1.428, anual R$ 2.448. **Substitui o combo mensal de R$ 200.** No site vale quando as duas modalidades estão no mesmo período.
+- **Desconto por período** exibido em relação ao mensal, com 2 casas: trimestral 11,11%, semestral 22,22%, anual 33,33%.
+- Aplicado em `src/data/plans.ts` (site) e na tabela `plan_prices` (migração 0011). Contratos existentes não mudam.

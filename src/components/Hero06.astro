@@ -3,7 +3,7 @@ import { Image } from 'astro:assets';
 import imgCorrida from '../assets/PlanoCorrida.png';
 import imgTriathlon from '../assets/PlanoTriathlon.png';
 import imgMusculacao from '../assets/PlanoMusculacao.png';
-import { modalities, periods, prices, installments, bundles, exclusiveGroups, benefits, personalFormats } from '../data/plans';
+import { modalities, periods, prices, installments, months, bundles, bundleDiscountPct, exclusiveGroups, benefits, personalFormats } from '../data/plans';
 
 // Hero 06 — escolha de modalidade e periodicidade, com resumo da contratação.
 // Preços e regras comerciais vivem em src/data/plans.ts. Sem JS, os controles
@@ -29,6 +29,11 @@ const images = {
 };
 
 const brl = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+const pct = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+// Desconto de cada período em relação a pagar mês a mês (ex.: R$ 160 contra R$ 180 = 11,11%).
+const discount = (total: number, monthly: number | null, n: number): number =>
+	monthly ? (1 - total / n / monthly) * 100 : 0;
 ---
 
 <section
@@ -39,6 +44,7 @@ const brl = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' 
 	data-prices={JSON.stringify(prices)}
 	data-periods={JSON.stringify(periods)}
 	data-installments={JSON.stringify(installments)}
+	data-bundle-pct={bundleDiscountPct}
 	data-bundles={JSON.stringify(bundles)}
 	data-exclusive={JSON.stringify(exclusiveGroups)}
 >
@@ -103,6 +109,9 @@ const brl = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' 
 											{price !== null && installments[p.id] > 1 && (
 												<span class="opt__split">até {installments[p.id]}x de {brl.format(price / installments[p.id])}</span>
 											)}
+											{price !== null && discount(price, prices[m.id].mensal, months[p.id]) > 0 && (
+												<span class="opt__off">{pct.format(discount(price, prices[m.id].mensal, months[p.id]))}% de desconto</span>
+											)}
 										</label>
 									);
 								})}
@@ -131,7 +140,7 @@ const brl = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' 
 							<span class="summary__total-value" data-total>{brl.format(0)}</span>
 						</p>
 						<p class="summary__saving" data-saving hidden>
-							<span class="summary__total-label">Desconto do plano combinado</span>
+							<span class="summary__total-label">Desconto do plano combinado ({bundleDiscountPct}%)</span>
 							<span class="summary__saving-value" data-saving-value></span>
 						</p>
 						<a class="plan__cta" href="#contato" data-cta>CONTRATAR</a>
@@ -396,6 +405,10 @@ const brl = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' 
 		font: 400 0.75rem / 1.2 var(--font-body);
 		color: var(--color-text-secondary);
 	}
+	.opt__off {
+		font: var(--font-weight-label) 0.75rem / 1.2 var(--font-body);
+		color: var(--color-accent);
+	}
 	.opt:has(.opt__input:checked) .opt__price {
 		color: var(--color-accent);
 	}
@@ -654,6 +667,7 @@ const brl = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' 
 		);
 		const brl = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 		const parcels: Record<string, number> = JSON.parse(root.dataset.installments ?? '{}');
+		const bundlePct = Number(root.dataset.bundlePct ?? 0);
 
 		const mods = root.querySelectorAll<HTMLElement>('[data-mod]');
 		const list = root.querySelector<HTMLElement>('[data-lines]')!;
@@ -760,7 +774,7 @@ const brl = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' 
 					saving += diff;
 					const note = document.createElement('span');
 					note.className = 'line__note';
-					note.textContent = `Soma dos planos individuais: ${brl.format(l.original)} · Desconto do plano combinado: ${brl.format(diff)}`;
+					note.textContent = `Soma dos planos individuais: ${brl.format(l.original)} · Desconto do plano combinado (${bundlePct}%): ${brl.format(diff)}`;
 					li.append(note);
 				}
 				list.append(li);

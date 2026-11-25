@@ -58,24 +58,31 @@ export const prices: Record<ModalityId, Record<PeriodId, number | null>> = {
  */
 export const exclusiveGroups: ModalityId[][] = [['corrida', 'triathlon']];
 
+/** Desconto (%) sobre a soma dos preços individuais quando as modalidades são combinadas. */
+export const bundleDiscountPct = 15;
+
+/** Meses de cada período (base do desconto em relação ao mensal). */
+export const months: Record<PeriodId, number> = { mensal: 1, trimestral: 3, semestral: 6, anual: 12 };
+
 /**
- * Combinações com preço próprio (desconto de combo). Só vale quando TODAS as
- * modalidades da combinação estão no mesmo período e há preço definido nele;
- * caso contrário, soma os preços individuais. Combinações que não existem
- * (Corrida + Triathlon, as três juntas) são impedidas por `exclusiveGroups`.
- * Musculação sozinha usa o preço individual. O combo só tem preço definido no mensal
- * (R$ 200); nos demais períodos a página soma os preços individuais.
+ * Combinações com desconto: Corrida + Musculação e Triathlon + Musculação. O preço é a soma dos
+ * individuais menos `bundleDiscountPct`, quando as duas modalidades estão no MESMO período.
+ * Combinações que não existem (Corrida + Triathlon, as três juntas) são impedidas por `exclusiveGroups`.
  */
-export const bundles: { modalities: ModalityId[]; prices: Record<PeriodId, number | null> }[] = [
-	{
-		modalities: ['corrida', 'musculacao'],
-		prices: { mensal: 200, trimestral: null, semestral: null, anual: null },
-	},
-	{
-		modalities: ['triathlon', 'musculacao'],
-		prices: { mensal: 200, trimestral: null, semestral: null, anual: null },
-	},
+const combos: ModalityId[][] = [
+	['corrida', 'musculacao'],
+	['triathlon', 'musculacao'],
 ];
+export const bundles: { modalities: ModalityId[]; prices: Record<PeriodId, number | null> }[] = combos.map((mods) => ({
+	modalities: mods,
+	prices: Object.fromEntries(
+		periods.map((p) => {
+			const singles = mods.map((m) => prices[m][p.id]);
+			const sum = singles.every((v) => v !== null) ? (singles as number[]).reduce((a, v) => a + v, 0) : null;
+			return [p.id, sum === null ? null : Math.round(sum * (100 - bundleDiscountPct)) / 100];
+		}),
+	) as Record<PeriodId, number | null>,
+}));
 
 /** Benefícios incluídos nos três produtos digitais (não acrescentar outros). */
 export const benefits = [

@@ -1019,8 +1019,9 @@ check('valores em centavos e leitura em formato brasileiro', $B::parseMoney('1.4
 check('parcelas somam o total (centavos na última)', $B::split(10000, 3) === [3333, 3333, 3334]);
 check('soma de meses respeita o fim do mês', $B::addMonths('2026-01-31', 1) === '2026-02-28' && $B::endDate('2026-03-01', 'trimestral') === '2026-05-31');
 $p = $B::priceTable();
-check('tabela inicial: preços informados e combo só no mensal', $p['corrida']['mensal']['total'] === 18000 && $p['triathlon']['anual']['total'] === 144000 && $p['musculacao']['semestral']['max'] === 6
-    && $p['corrida+musculacao']['mensal']['total'] === 20000 && $p['corrida+musculacao']['anual']['total'] === null);
+check('tabela inicial: preços informados e combo com 15% em todos os períodos', $p['corrida']['mensal']['total'] === 18000 && $p['triathlon']['anual']['total'] === 144000 && $p['musculacao']['semestral']['max'] === 6
+    && $p['corrida+musculacao']['mensal']['total'] === 30600 && $p['corrida+musculacao']['trimestral']['total'] === 81600
+    && $p['triathlon+musculacao']['semestral']['total'] === 142800 && $p['triathlon+musculacao']['anual']['total'] === 244800);
 
 echo "Contratos\n";
 $eva = $uid('eva@example.com');
@@ -1032,7 +1033,7 @@ $new = static function (int $athlete, array $data) use ($adm): array {
     return [$s, (int) preg_replace('#.*/#', '', (string) $adm->header('Location'))];
 };
 foreach ([
-    'sem produto' => ['product' => ''], 'combo sem preço no anual' => ['product' => 'corrida+musculacao', 'period' => 'anual'],
+    'sem produto' => ['product' => ''], 'condição inexistente' => ['condition' => 'gratis'],
     'parcelas demais' => ['installments' => '2'], 'data inválida' => ['starts_on' => '2026-02-30'],
     'valor negociado sem justificativa' => ['condition' => 'custom', 'value' => '100'], 'valor negociado inválido' => ['condition' => 'custom', 'value' => 'abc', 'reason' => 'teste ok'],
     'aluno antigo em combo' => ['condition' => 'legacy_120', 'product' => 'corrida+musculacao'], 'aluno antigo no anual' => ['condition' => 'legacy_120', 'period' => 'anual'],
