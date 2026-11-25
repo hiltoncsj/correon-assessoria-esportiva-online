@@ -10,7 +10,8 @@ const nav = [
 	{ label: 'EM MOVIMENTO', href: '#movimento' },
 	{ label: 'PERGUNTAS', href: '#perguntas' },
 ];
-const cta = { label: 'COMEÇAR', href: '#contato' };
+// Área restrita (PHP). Em produção fica no mesmo domínio; no computador local roda na porta 8080.
+const cta = { label: 'ENTRAR', href: import.meta.env.DEV ? 'http://localhost:8080/entrar' : '/entrar' };
 ---
 
 <header class="site-header" data-header>
