@@ -107,3 +107,4 @@ Substitui, no ajuste 2, o "dia fixo por sessão" e o envio direto pela tela de a
 | Anual | R$ 1.440 | até 12x de R$ 120 |
 
 Aplicado na Hero 6 (`src/data/plans.ts`). **Premissas a confirmar:** (1) valores valem para cada modalidade; (2) R$ 180 substitui os R$ 150 para novos alunos; (3) o combo de R$ 200 continua só no mensal — trimestral/semestral/anual combinados mostram a soma dos individuais; (4) juros do parcelamento não definidos (a página não afirma "sem juros"). Continuam em aberto: preço do combo nos demais períodos, aluno antigo (R$ 120/mês), se as parcelas são no cartão (total garantido) ou cobrança recorrente, preços do Personal Trainer, gateway, prazo de inadimplência e cancelamento.
+- Informado pelo cliente: hoje há **13 alunos antigos, em 4 cidades** (condição legada a registrar na Sprint 6; ainda não definido como serão cadastrados nem se a cidade afeta preço ou atendimento).
