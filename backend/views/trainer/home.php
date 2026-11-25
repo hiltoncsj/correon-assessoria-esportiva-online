@@ -1,6 +1,7 @@
 <?php /** @var list<array<string,mixed>> $athletes */ ?>
 <p class="eyebrow">Treinador</p>
 <h1>Meus atletas</h1>
+<p class="muted"><?= (int) $capacity['active'] ?> de <?= (int) $capacity['limit'] ?> vagas ocupadas (online).</p>
 <?php if (!$athletes): ?>
 	<div class="tile"><p class="muted">Você ainda não tem atletas vinculados. A administração faz a atribuição dos atletas.</p></div>
 <?php else: ?>

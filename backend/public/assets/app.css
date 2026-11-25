@@ -268,3 +268,13 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { box-shadow: 
 	.tbl--items td:first-child::before { content: none; }
 	.tbl--items td.is-empty { display: none; }
 }
+
+.stat { font: 800 2.2rem / 1 var(--font-display); margin: 0 0 var(--space-xs); }
+.stat small { font-size: 1rem; font-weight: 600; color: var(--color-text-secondary); }
+.meter--alert .meter__bar { background: #ffc857; }
+.meter--full .meter__bar { background: #ff8a8a; }
+.plain-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-xs); }
+
+.shell__main > .grid { margin-bottom: var(--space-lg); }
+.shell__main > .grid + .tile { margin-top: 0; }
+.plain-list + p { margin-top: var(--space-md); }

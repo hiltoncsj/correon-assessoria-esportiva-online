@@ -80,3 +80,12 @@ Substitui, no ajuste 2, o "dia fixo por sessão" e o envio direto pela tela de a
 - Em "Já com treino nesta semana" cada atleta tem **Excluir treino** (com confirmação). A ação **cancela** (não apaga) todos os treinos do atleta **na modalidade da aba e na semana exibida**, incluindo rascunhos e treinos criados avulsos, e o nome volta para a lista de pendentes. Histórico de versões e auditoria preservados; o atleta deixa de ver.
 - Treino **já registrado** pelo atleta nunca é cancelado; nesse caso o atleta continua na lista de quem já tem treino, com aviso.
 - Treinos de **outra modalidade** enviados na mesma semana não são afetados (excluir pela aba daquela modalidade).
+
+## 2026-11-25 — Sprint 4: painel do treinador
+- **Rotas:** `/treinador` (início), `/atletas`, `/acompanhamento`, `/agenda`, `/disponibilidade`, `/novidades` (além de modelos, aplicar e zonas). Toda consulta de treino junta o vínculo ativo do treinador na mesma modalidade.
+- **Capacidade online:** atletas distintos com vínculo ativo; padrão 30 (`trainer_settings.online_limit`); alerta a partir de 80%; em 100% `assign-trainer.php` bloqueia (código de saída 2), salvo `--excecao="motivo"`, gravada em `capacity_exceptions` e na auditoria. Nova modalidade de quem já é atleta não consome vaga. Ajuste por `bin/set-capacity.php` até a tela do admin (Sprint 5).
+- **Capacidade presencial:** campo separado, sem valor padrão e sem contagem até o Personal Trainer (Sprint 7). Não inventado.
+- **Perfil do atleta para o treinador:** idade (não a data de nascimento), cidade, telefone, objetivo, histórico e contato de emergência, só com vínculo ativo; cada acesso é auditado (`athlete_profile_viewed`) e o atleta é avisado na tela "Meu perfil". **Revisar com o responsável LGPD** e refletir na Política de Privacidade.
+- **Acompanhamento:** planejado × realizado, sem registro e esforço médio (1, 4 ou 12 semanas).
+- **Agenda:** treinos da semana (compromissos presenciais na Sprint 7). **Disponibilidade:** horários por dia (online/presencial), sem sobreposição; ainda sem uso em agendamento.
+- **Notificações:** "Novidades" calculadas dos registros dos atletas (30 dias), com contador desde a última visita. Sem e-mail/WhatsApp/push (decisão futura).

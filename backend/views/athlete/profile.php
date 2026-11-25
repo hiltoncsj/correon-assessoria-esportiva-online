@@ -19,6 +19,8 @@ $err = static fn (string $k) => !empty($errors[$k]) ? '<span class="field__err">
 <form class="tile form" method="post" action="/app/perfil" novalidate>
 	<input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
 
+	<p class="muted">Os treinadores vinculados a você podem ver seu telefone, idade, cidade, objetivo, histórico esportivo e contato de emergência.</p>
+
 	<h2>Dados pessoais</h2>
 	<label class="field">Nome completo
 		<input type="text" name="name" value="<?= e($old['name'] ?? '') ?>" maxlength="120" autocomplete="name" required>

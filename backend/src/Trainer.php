@@ -9,23 +9,6 @@ namespace Correon;
  */
 final class Trainer
 {
-    public static function home(): never
-    {
-        $u = App::require('trainer');
-        $t = (int) $u['id'];
-        $athletes = Db::all(
-            "SELECT a.id, a.name, GROUP_CONCAT(m.name ORDER BY m.id SEPARATOR ', ') AS modalities,
-               (SELECT COUNT(*) FROM workouts w WHERE w.athlete_id = a.id AND w.status = 'draft'
-                  AND w.modality_id IN (SELECT t2.modality_id FROM trainer_athletes t2 WHERE t2.trainer_id = ? AND t2.athlete_id = a.id AND t2.status = 'active')) AS drafts,
-               (SELECT COUNT(*) FROM workouts w WHERE w.athlete_id = a.id AND w.status = 'published' AND w.scheduled_date >= CURDATE()
-                  AND w.modality_id IN (SELECT t3.modality_id FROM trainer_athletes t3 WHERE t3.trainer_id = ? AND t3.athlete_id = a.id AND t3.status = 'active')) AS upcoming
-             FROM trainer_athletes ta JOIN users a ON a.id = ta.athlete_id JOIN modalities m ON m.id = ta.modality_id
-             WHERE ta.trainer_id = ? AND ta.status = 'active' GROUP BY a.id, a.name ORDER BY a.name",
-            [$t, $t, $t]
-        );
-        View::render('trainer/home', ['title' => 'Painel do treinador', 'shell' => 'trainer', 'active' => 'home', 'athletes' => $athletes]);
-    }
-
     public static function athlete(int $athleteId): never
     {
         $u = App::require('trainer');
@@ -58,7 +41,33 @@ final class Trainer
             'title' => $athlete['name'], 'shell' => 'trainer', 'active' => 'home',
             'athlete' => $athlete, 'mods' => $mods, 'workouts' => $workouts,
             'zones' => Workout::zones($athleteId), 'maxHr' => Workout::maxHr($athleteId), 'levels' => $levels,
+            'profile' => self::athleteProfile((int) $u['id'], $athleteId),
+            'summary' => Db::one(
+                "SELECT COUNT(*) AS planned, SUM(l.outcome IN ('completed','partial')) AS done,
+                        SUM(l.id IS NULL AND w.scheduled_date < CURDATE()) AS missing, ROUND(AVG(l.effort), 1) AS effort
+                 FROM workouts w JOIN modalities m ON m.id = w.modality_id LEFT JOIN workout_logs l ON l.workout_id = w.id
+                 WHERE w.athlete_id = ? AND m.slug IN ($in) AND w.status = 'published'
+                   AND w.scheduled_date BETWEEN (CURDATE() - INTERVAL 28 DAY) AND CURDATE()",
+                [$athleteId, ...$mods]
+            ),
         ]);
+    }
+
+    /**
+     * Dados do perfil que o treinador vinculado precisa (idade em vez da data de nascimento).
+     * O acesso é auditado; o atleta é informado desta visibilidade na tela "Meu perfil".
+     * @return array<string,mixed>
+     */
+    private static function athleteProfile(int $trainerId, int $athleteId): array
+    {
+        $p = Db::one('SELECT phone, birth_date, city, state, goal, sports_background, emergency_name, emergency_phone
+                      FROM athlete_profiles WHERE user_id = ?', [$athleteId]) ?? [];
+        if (!empty($p['birth_date'])) {
+            $p['age'] = (new \DateTimeImmutable($p['birth_date']))->diff(new \DateTimeImmutable('today'))->y;
+        }
+        unset($p['birth_date']);
+        Audit::log('athlete_profile_viewed', $trainerId, 'user', $athleteId);
+        return $p;
     }
 
     /**

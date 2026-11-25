@@ -1,9 +1,15 @@
 <?php /** @var string $inner @var string $active */
+$unseen = \Correon\TrainerPanel::unseen((int) $user['id']);
 $items = [
-	'home' => ['/treinador', 'Meus atletas'],
+	'inicio' => ['/treinador', 'Início'],
+	'home' => ['/treinador/atletas', 'Meus atletas'],
 	'modelos' => ['/treinador/modelos', 'Modelos de treino'],
 	'aplicar' => ['/treinador/modelos/aplicar', 'Aplicar modelos'],
 	'zonas' => ['/treinador/zonas', 'Zonas de FC'],
+	'acompanhamento' => ['/treinador/acompanhamento', 'Acompanhamento'],
+	'agenda' => ['/treinador/agenda', 'Agenda'],
+	'disponibilidade' => ['/treinador/disponibilidade', 'Disponibilidade'],
+	'novidades' => ['/treinador/novidades', 'Novidades' . ($unseen ? " ($unseen)" : '')],
 ];
 ?>
 <div class="shell">

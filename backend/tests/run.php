@@ -20,7 +20,7 @@ if (!str_ends_with((string) Correon\Env::get('DB_NAME'), '_test')) {
 $php = PHP_BINARY;
 $pdo = Db::pdo();
 $pdo->exec('SET FOREIGN_KEY_CHECKS=0');
-foreach (['workout_template_items', 'workout_template_sessions', 'workout_templates', 'athlete_hr_zones', 'athlete_hr_settings', 'workout_log_revisions', 'workout_logs', 'workout_versions', 'workout_items', 'workouts', 'trainer_athletes', 'modalities', 'athlete_profiles', 'audit_log', 'consents', 'password_resets', 'rate_events', 'user_roles', 'users', 'schema_migrations'] as $t) {
+foreach (['workout_template_items', 'workout_template_sessions', 'workout_templates', 'athlete_hr_zones', 'athlete_hr_settings', 'trainer_settings', 'capacity_exceptions', 'trainer_availability', 'workout_log_revisions', 'workout_logs', 'workout_versions', 'workout_items', 'workouts', 'trainer_athletes', 'modalities', 'athlete_profiles', 'audit_log', 'consents', 'password_resets', 'rate_events', 'user_roles', 'users', 'schema_migrations'] as $t) {
     $pdo->exec("DROP TABLE IF EXISTS $t"); // somente no banco de teste
 }
 $pdo->exec('DROP TABLE IF EXISTS roles');
@@ -330,7 +330,7 @@ $tr2 = new Client(); $tr2->post('/entrar', ['email' => 'trn2@example.com', 'pass
 $mar = new Client(); $mar->post('/entrar', ['email' => 'maria@example.com', 'password' => 'final-senha-77777']);
 $joa = new Client(); $joa->post('/entrar', ['email' => 'joao@example.com', 'password' => 'senha-forte-123']);
 
-[$s, $b] = $tr1->req('GET', '/treinador');
+[$s, $b] = $tr1->req('GET', '/treinador/atletas');
 check('treinador vê a própria carteira', $s === 200 && str_contains($b, 'Maria') && !str_contains($b, 'João Outro'));
 [$s] = $tr2->req('GET', "/treinador/atletas/$mariaId");
 check('treinador sem vínculo NÃO acessa atleta alheio (404)', $s === 404);
@@ -810,6 +810,96 @@ check('não altera atleta não vinculado (404)', $s === 404 && count($zonesOf($j
 [$s, $b] = $ana->req('GET', '/app/perfil');
 check('o atleta recebe a própria FC atualizada', str_contains($b, '161–168 bpm'));
 check('envios auditados', (int) Db::one("SELECT COUNT(*) c FROM audit_log WHERE action = 'workout_from_template'")['c'] >= 10);
+
+echo "Sprint 4 — painel do treinador\n";
+Db::run('DELETE FROM rate_events');
+foreach (['/treinador', '/treinador/atletas', '/treinador/acompanhamento', '/treinador/agenda', '/treinador/disponibilidade', '/treinador/novidades'] as $path) {
+    [$s] = $tr1->req('GET', $path);
+    [$s2] = $mar->req('GET', $path);
+    check("$path: treinador 200, atleta 403", $s === 200 && $s2 === 403, "t=$s a=$s2");
+}
+$tid = $uid('trn@example.com');
+$activeNow = (int) Db::one("SELECT COUNT(DISTINCT athlete_id) c FROM trainer_athletes WHERE trainer_id = ? AND status = 'active'", [$tid])['c'];
+[$s, $b] = $tr1->req('GET', '/treinador');
+check('início mostra capacidade (padrão 30)', str_contains($b, '/ 30 atletas') && str_contains($b, '<p class="stat">' . $activeNow . '<small>'));
+check('presencial separado e sem número inventado', str_contains($b, 'Presencial (Personal Trainer): ainda não contabilizado'));
+
+echo "Capacidade: alerta, bloqueio e exceção\n";
+$cli('set-capacity.php', ['trn@example.com', (string) ($activeNow + 5)]);
+[$s, $b] = $tr1->req('GET', '/treinador');
+check('abaixo de 80%: sem aviso', !str_contains($b, 'da sua capacidade') && !str_contains($b, 'Capacidade esgotada'));
+$cli('set-capacity.php', ['trn@example.com', (string) $activeNow]);
+[$s, $b] = $tr1->req('GET', '/treinador');
+check('em 100%: aviso de capacidade esgotada', str_contains($b, 'Capacidade esgotada'));
+$dani = new Client(); register($dani, ['email' => 'dani@example.com', 'name' => 'Dani Nova']);
+$daniId = $uid('dani@example.com');
+$linked = static fn (int $a) => (int) Db::one("SELECT COUNT(*) c FROM trainer_athletes WHERE trainer_id = ? AND athlete_id = ? AND status = 'active'", [$tid, $a])['c'];
+check('no limite, nova atribuição é BLOQUEADA', $cli('assign-trainer.php', ['assign', 'trn@example.com', 'dani@example.com', 'corrida']) === 2 && $linked($daniId) === 0);
+check('bloqueio auditado', Db::one("SELECT id FROM audit_log WHERE action = 'capacity_blocked'") !== null);
+check('outra modalidade de quem JÁ é atleta não consome vaga', $cli('assign-trainer.php', ['assign', 'trn@example.com', 'ana@example.com', 'musculacao']) === 0 && $linked($anaId) === 2);
+check('exceção com motivo é permitida e registrada', $cli('assign-trainer.php', ['assign', 'trn@example.com', 'dani@example.com', 'corrida', '--excecao=Autorizado pela administração']) === 0
+    && $linked($daniId) === 1 && Db::one('SELECT reason FROM capacity_exceptions WHERE athlete_id = ?', [$daniId])['reason'] === 'Autorizado pela administração');
+$cli('set-capacity.php', ['trn@example.com', '5']);
+[$s, $b] = $tr1->req('GET', '/treinador');
+check('4 de 5 atletas (80%): alerta no painel', Correon\Capacity::status($tid)['state'] === 'alert' && str_contains($b, 'você já usa 80% da sua capacidade'), json_encode(Correon\Capacity::status($tid)));
+check('capacidade inválida é recusada pelo script', $cli('set-capacity.php', ['trn@example.com', '0']) !== 0);
+$cli('set-capacity.php', ['trn@example.com', '30']);
+
+echo "Perfil do atleta para o treinador\n";
+[$s, $b] = $tr1->req('GET', $mariaPage);
+check('treinador vinculado vê objetivo, cidade e telefone', str_contains($b, 'Santos') && str_contains($b, '11912345678') && str_contains($b, 'Correr 10 km'));
+check('mostra idade, não a data de nascimento; HTML escapado', str_contains($b, ' anos</dd>') && !str_contains($b, '1990-05-20') && !str_contains($b, '20/05/1990') && !str_contains($b, '<b>sem parar</b>'));
+check('acesso ao perfil é auditado', Db::one("SELECT id FROM audit_log WHERE action = 'athlete_profile_viewed' AND user_id = ? AND entity_id = ?", [$tid, $mariaId]) !== null);
+[$s, $b] = $tr2->req('GET', $mariaPage);
+check('treinador sem vínculo não vê o perfil (404)', $s === 404 && !str_contains($b, 'Santos'));
+[$s, $b] = $mar->req('GET', '/app/perfil');
+check('atleta é avisado de que o treinador vê o perfil', str_contains($b, 'treinadores vinculados a você podem ver'));
+check('resumo das últimas 4 semanas na página do atleta', str_contains($tr1->req('GET', $mariaPage)[1], 'Últimas 4 semanas'));
+
+echo "Acompanhamento, agenda e novidades\n";
+$today = date('Y-m-d');
+$tr1->post('/treinador/treinos/novo', ['athlete_id' => $mariaId, 'modality' => 'corrida', 'title' => 'Treino de hoje', 'scheduled_date' => $today, 'notes' => '', 'action' => 'publish',
+    'items' => [['label' => 'Rodagem', 'duration_minutes' => '30', 'hr_zone' => '2']]], "/treinador/treinos/novo?atleta=$mariaId&modalidade=corrida");
+$hoje = (int) preg_replace('#.*/#', '', (string) $tr1->header('Location'));
+$tr1->req('GET', '/treinador/novidades');
+sleep(1);
+$mar->post("/app/treinos/$hoje/registro", ['outcome' => 'completed', 'performed_on' => $today, 'effort' => '9', 'notes' => 'Muito <i>puxado</i>'], "/app/treinos/$hoje");
+check('registro novo conta como novidade', Correon\TrainerPanel::unseen($tid) === 1);
+[$s, $b] = $tr1->req('GET', '/treinador');
+check('menu mostra "Novidades (1)"', str_contains($b, 'Novidades (1)'));
+[$s, $b] = $tr1->req('GET', '/treinador/novidades');
+check('novidades mostra o registro como Novo, com comentário escapado', str_contains($b, 'Treino de hoje') && str_contains($b, '>Novo<') && str_contains($b, '&lt;i&gt;puxado') && !str_contains($b, '<i>puxado</i>'));
+check('depois de visto, o contador zera', Correon\TrainerPanel::unseen($tid) === 0);
+[$s, $b] = $tr2->req('GET', '/treinador/novidades');
+check('outro treinador não vê o registro', !str_contains($b, 'Treino de hoje'));
+[$s, $b] = $tr1->req('GET', '/treinador/acompanhamento?semanas=4');
+check('acompanhamento lista meus atletas e registros', $s === 200 && str_contains($b, 'Maria Teste') && str_contains($b, 'Treino de hoje') && !str_contains($b, 'João Outro'));
+[$s] = $tr1->req('GET', '/treinador/acompanhamento?semanas=999');
+check('período inválido cai no padrão (200)', $s === 200);
+[$s, $b] = $tr1->req('GET', '/treinador/agenda');
+check('agenda da semana mostra o treino de hoje', $s === 200 && str_contains($b, 'Treino de hoje') && str_contains($b, 'Maria Teste'));
+[$s, $b] = $tr2->req('GET', '/treinador/agenda');
+check('agenda de outro treinador não mostra meus atletas', !str_contains($b, 'Maria Teste'));
+[$s, $b] = $tr1->req('GET', '/treinador/agenda?semana=abc');
+check('semana inválida na agenda não quebra', $s === 200);
+
+echo "Disponibilidade\n";
+$slot = static fn (array $o = []) => $o + ['weekday' => '1', 'start_time' => '06:00', 'end_time' => '09:00', 'mode' => 'presencial'];
+$slots = static fn () => (int) Db::one('SELECT COUNT(*) c FROM trainer_availability WHERE trainer_id = ?', [$tid])['c'];
+[$s] = $tr1->post('/treinador/disponibilidade', $slot());
+check('adiciona horário', $s === 303 && $slots() === 1);
+foreach (['fim antes do início' => ['weekday' => '2', 'start_time' => '10:00', 'end_time' => '09:00'], 'sobreposição' => ['start_time' => '08:00', 'end_time' => '10:00'],
+    'dia inválido' => ['weekday' => '9'], 'hora inválida' => ['weekday' => '3', 'start_time' => '25:00'], 'tipo inválido' => ['weekday' => '3', 'mode' => 'x']] as $label => $over) {
+    [$s] = $tr1->post('/treinador/disponibilidade', $slot($over));
+    check("horário rejeitado: $label (422)", $s === 422 && $slots() === 1, "status=$s");
+}
+[$s] = $tr1->post('/treinador/disponibilidade', $slot(['start_time' => '09:00', 'end_time' => '11:00', 'mode' => 'online']));
+check('horário encostado (sem sobrepor) é aceito', $s === 303 && $slots() === 2);
+$sid = (int) Db::one('SELECT id FROM trainer_availability WHERE trainer_id = ? LIMIT 1', [$tid])['id'];
+[$s] = $tr2->post("/treinador/disponibilidade/$sid/remover", [], '/treinador/disponibilidade');
+check('outro treinador não remove meu horário (404)', $s === 404 && $slots() === 2);
+[$s] = $tr1->post("/treinador/disponibilidade/$sid/remover", [], '/treinador/disponibilidade');
+check('remove o próprio horário', $s === 303 && $slots() === 1);
 
 echo "\nResultado: $pass ok, $fail falha(s)\n";
 exit($fail ? 1 : 0);

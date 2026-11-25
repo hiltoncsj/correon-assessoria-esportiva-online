@@ -2,8 +2,36 @@
 $modNames = ['corrida' => 'Corrida', 'triathlon' => 'Triathlon', 'musculacao' => 'Musculação'];
 $badge = ['draft' => 'badge--draft', 'published' => 'badge--ok', 'cancelled' => 'badge--off'];
 ?>
-<p class="eyebrow"><a href="/treinador">← Meus atletas</a></p>
+<p class="eyebrow"><a href="/treinador/atletas">← Meus atletas</a></p>
 <h1><?= e($athlete['name']) ?></h1>
+
+<div class="grid">
+	<section class="tile" aria-labelledby="h-perfil">
+		<h2 id="h-perfil">Perfil do atleta</h2>
+		<?php $has = array_filter($profile, static fn ($v) => $v !== null && $v !== ''); ?>
+		<?php if (!$has): ?>
+			<p class="muted">O atleta ainda não preencheu o perfil.</p>
+		<?php else: ?>
+			<dl class="facts">
+				<?php if (isset($profile['age'])): ?><dt>Idade</dt><dd><?= (int) $profile['age'] ?> anos</dd><?php endif; ?>
+				<?php if (!empty($profile['city'])): ?><dt>Cidade</dt><dd><?= e($profile['city']) ?><?= !empty($profile['state']) ? '/' . e($profile['state']) : '' ?></dd><?php endif; ?>
+				<?php if (!empty($profile['phone'])): ?><dt>Telefone</dt><dd><?= e($profile['phone']) ?></dd><?php endif; ?>
+				<?php if (!empty($profile['goal'])): ?><dt>Objetivo</dt><dd><?= nl2br(e($profile['goal'])) ?></dd><?php endif; ?>
+				<?php if (!empty($profile['sports_background'])): ?><dt>Histórico</dt><dd><?= nl2br(e($profile['sports_background'])) ?></dd><?php endif; ?>
+				<?php if (!empty($profile['emergency_name'])): ?><dt>Emergência</dt><dd><?= e($profile['emergency_name']) ?> · <?= e($profile['emergency_phone']) ?></dd><?php endif; ?>
+			</dl>
+		<?php endif; ?>
+	</section>
+	<section class="tile" aria-labelledby="h-resumo">
+		<h2 id="h-resumo">Últimas 4 semanas</h2>
+		<dl class="facts">
+			<dt>Treinos publicados</dt><dd><?= (int) $summary['planned'] ?></dd>
+			<dt>Realizados</dt><dd><?= (int) $summary['done'] ?></dd>
+			<dt>Sem registro</dt><dd><?= (int) $summary['missing'] ?></dd>
+			<dt>Esforço médio</dt><dd><?= $summary['effort'] === null ? '—' : e(str_replace('.', ',', (string) $summary['effort'])) . '/10' ?></dd>
+		</dl>
+	</section>
+</div>
 
 <section class="tile" aria-labelledby="novo">
 	<h2 id="novo">Novo treino</h2>
