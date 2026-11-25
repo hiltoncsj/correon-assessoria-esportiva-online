@@ -6,7 +6,7 @@ $dayDate = static fn (int $d) => date('d/m', strtotime($monday . ' +' . ($d - 1)
 ?>
 <p class="eyebrow"><a href="<?= e($back) ?>">← Voltar ao passo 1</a></p>
 <h1>Montar a semana</h1>
-<p class="muted">Passo 2: semana de <?= e(date('d/m', strtotime($monday))) ?> a <?= e($dayDate(7)) ?>. Em cada dia, escolha a sessão que o atleta vai fazer, na ordem que quiser. Dias em “—” ficam sem treino. Os dias já cadastrados do atleta vêm preenchidos.</p>
+<p class="muted">Passo 2: semana de <?= e(date('d/m', strtotime($monday))) ?> a <?= e($dayDate(7)) ?>. Em cada dia, escolha a sessão que o atleta vai fazer; use “+ outro treino” para pôr dois ou mais no mesmo dia (podem se repetir). Para misturar modalidades, o atleta precisa estar vinculado a você em cada uma. Dias em “—” ficam sem treino. Os dias já cadastrados do atleta vêm preenchidos.</p>
 
 <form class="form form--wide" method="post" action="/treinador/modelos/aplicar" novalidate>
 	<input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
@@ -23,22 +23,26 @@ $dayDate = static fn (int $d) => date('d/m', strtotime($monday . ' +' . ($d - 1)
 				<p class="muted">Há <?= (int) $a['unplaced'] ?> sessão(ões) do modelo sem dia: o atleta tem menos dias que sessões. Ajuste se quiser.</p>
 			<?php endif; ?>
 			<div class="week">
-				<?php foreach (Templates::WEEKDAYS as $day => $label): $chosen = $a['grid'][$day] ?? 0; ?>
-					<label class="field"><?= e($label) ?> <?= e($dayDate($day)) ?>
-						<select name="plan[<?= (int) $a['id'] ?>][<?= $day ?>]" class="select">
-							<option value="">—</option>
-							<?php
-							// o modelo do atleta vem primeiro; os demais ficam disponíveis para casos especiais
-							$groups = [$a['template'] => $library[$a['template']]] + $library;
-							foreach ($groups as $tpl): ?>
-								<optgroup label="<?= e($tpl['name']) ?>">
-									<?php foreach ($tpl['sessions'] as $k => $s): ?>
-										<option value="<?= (int) $s['id'] ?>"<?= $chosen === (int) $s['id'] ? ' selected' : '' ?>><?= e($tpl['name']) ?> · <?= ($k + 1) ?>. <?= e($s['title']) ?></option>
-									<?php endforeach; ?>
-								</optgroup>
-							<?php endforeach; ?>
-						</select>
-					</label>
+				<?php foreach (Templates::WEEKDAYS as $day => $label):
+					$chosen = $a['grid'][$day] ?? 0;
+					$name = 'plan[' . (int) $a['id'] . '][' . $day . '][]';
+					$options = static function (int $selected) use ($a): string {
+						$html = '<option value="">—</option>';
+						foreach ($a['allowed'] as $tpl) {
+							$html .= '<optgroup label="' . e($tpl['modality_name'] . ' · ' . $tpl['name']) . '">';
+							foreach ($tpl['sessions'] as $k => $s) {
+								$html .= '<option value="' . (int) $s['id'] . '"' . ($selected === (int) $s['id'] ? ' selected' : '') . '>' . e($tpl['name'] . ' · ' . ($k + 1) . '. ' . $s['title']) . '</option>';
+							}
+							$html .= '</optgroup>';
+						}
+						return $html;
+					}; ?>
+					<fieldset class="day" data-day>
+						<legend><?= e($label) ?> <?= e($dayDate($day)) ?></legend>
+						<select name="<?= e($name) ?>" class="select" data-slot aria-label="<?= e($label) ?>, treino de <?= e($a['name']) ?>"><?= $options($chosen) ?></select>
+						<noscript><select name="<?= e($name) ?>" class="select" aria-label="<?= e($label) ?>, segundo treino"><?= $options(0) ?></select></noscript>
+						<button type="button" class="btn btn--sm btn--ghost" data-add-slot hidden>+ outro treino</button>
+					</fieldset>
 				<?php endforeach; ?>
 			</div>
 		</fieldset>
@@ -52,4 +56,6 @@ $dayDate = static fn (int $d) => date('d/m', strtotime($monday . ' +' . ($d - 1)
 		<button class="btn" type="submit">Enviar treinos</button>
 		<a class="btn btn--ghost" href="<?= e($back) ?>">Voltar</a>
 	</div>
+	<input type="hidden" name="_end" value="1">
 </form>
+<script src="/assets/workout-form.js" defer></script>

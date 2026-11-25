@@ -68,3 +68,10 @@ Substitui, no ajuste 2, o "dia fixo por sessão" e o envio direto pela tela de a
 - **Tela "Zonas de FC"** (`/treinador/zonas`): todos os atletas do treinador, FC máxima e Z1..Z7 editáveis; "Calcular" por linha usa os percentuais padrão. Só grava linhas alteradas; uma linha inválida cancela tudo.
 - **Formulários grandes:** `public/.user.ini` define `max_input_vars=5000` (enviar junto no deploy). Formulários de modelo e de zonas têm o campo `_end`: se o PHP cortar o envio, nada é gravado e o usuário é avisado. No servidor local usar `php -d max_input_vars=5000`.
 - **Em aberto:** dois treinos no mesmo dia; repetir a semana anterior de um atleta; aplicar várias semanas de uma vez.
+
+## 2026-11-25 — Sprint 3, ajuste 5: vários treinos no mesmo dia
+- No passo 2, cada dia aceita **vários treinos** ("+ outro treino"), em qualquer ordem, inclusive a mesma sessão repetida (teto técnico de 10 por dia). Substitui a regra anterior de uma sessão por dia.
+- Podem se combinar **modalidades diferentes** (corrida + musculação, natação + ciclismo + corrida etc.). **Regra mantida:** o treinador só prescreve nas modalidades em que está vinculado ao atleta (natação e ciclismo pertencem ao Triathlon). O envio é recusado inteiro se alguma modalidade não tiver vínculo.
+- Os treinos do dia ficam na ordem escolhida no envio (não há horário).
+- A lista de pendentes continua valendo pela **modalidade escolhida no passo 1** e pela semana: quem já tem treino nela sai da lista. Para acrescentar um treino a quem já recebeu, usar "Novo treino" na página do atleta.
+- **Em aberto:** horário/turno por treino; acrescentar sessões de modelo a uma semana já enviada.

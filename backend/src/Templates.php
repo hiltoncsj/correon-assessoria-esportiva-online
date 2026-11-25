@@ -11,6 +11,7 @@ namespace Correon;
 final class Templates
 {
     public const WEEKDAYS = [1 => 'Segunda-feira', 2 => 'Terça-feira', 3 => 'Quarta-feira', 4 => 'Quinta-feira', 5 => 'Sexta-feira', 6 => 'Sábado', 7 => 'Domingo'];
+    public const MAX_PER_DAY = 10; // teto técnico de treinos no mesmo dia
     public const MAX_SESSIONS = 100; // teto técnico de segurança; não é regra de negócio
     public const DAY_SHORT = [1 => 'Seg', 2 => 'Ter', 3 => 'Qua', 4 => 'Qui', 5 => 'Sex', 6 => 'Sáb', 7 => 'Dom'];
 
@@ -229,10 +230,11 @@ final class Templates
         if (!$picks) {
             self::fail($back, 'Marque pelo menos um atleta em algum treino.');
         }
-        $library = self::library($t, $modId);
+        $library = self::library($t);
         $athletes = [];
         foreach ($picks as $athleteId => $tplId) {
-            if (!in_array($mod, Workout::linkedModalities($t, $athleteId), true) || !isset($library[$tplId])) {
+            $linked = Workout::linkedModalities($t, $athleteId);
+            if (!in_array($mod, $linked, true) || ($library[$tplId]['modality'] ?? null) !== $mod) {
                 self::fail($back, 'Seleção inválida: atleta ou modelo não disponível.');
             }
             $row = Db::one("SELECT a.name, ta.train_days FROM trainer_athletes ta JOIN users a ON a.id = ta.athlete_id
@@ -245,7 +247,9 @@ final class Templates
                     $grid[$days[$k]] = (int) $sess['id'];
                 }
             }
-            $athletes[] = ['id' => $athleteId, 'name' => $row['name'], 'template' => $tplId, 'days' => $days, 'grid' => $grid,
+            // sessões que este treinador pode prescrever a este atleta: modalidades com vínculo (a do modelo escolhido primeiro)
+            $allowed = [$tplId => $library[$tplId]] + array_filter($library, static fn ($x) => in_array($x['modality'], $linked, true));
+            $athletes[] = ['id' => $athleteId, 'name' => $row['name'], 'template' => $tplId, 'allowed' => $allowed, 'days' => $days, 'grid' => $grid,
                 'unplaced' => max(0, count($library[$tplId]['sessions']) - count($grid)),
                 'zones' => (bool) Workout::zones($athleteId)];
         }
@@ -261,30 +265,42 @@ final class Templates
         [$mod, $modId, $monday, $back] = self::weekContext($t);
         $status = Http::input('publish') === '1' ? 'published' : 'draft';
 
-        $library = self::library($t, $modId);
+        if (!Http::formComplete()) {
+            self::fail($back, 'A montagem ficou grande demais para o servidor e chegou incompleta. Nada foi criado. Envie para menos atletas por vez.');
+        }
+
         $sessionIndex = []; // id da sessão => [modelo, sessão]
-        foreach ($library as $tpl) {
+        foreach (self::library($t) as $tpl) {
             foreach ($tpl['sessions'] as $sess) {
                 $sessionIndex[(int) $sess['id']] = [$tpl, $sess];
             }
         }
 
+        // plan[ID_DO_ATLETA][DIA][] = ID_DA_SESSÃO (quantos treinos quiser por dia, na ordem escolhida)
         $plan = [];
         foreach (is_array($_POST['plan'] ?? null) ? $_POST['plan'] : [] as $athleteId => $week) {
             if (!ctype_digit((string) $athleteId) || !is_array($week)) {
                 continue;
             }
-            foreach ($week as $day => $sid) {
-                if (!is_string($sid) || $sid === '') {
-                    continue;
+            $athleteId = (int) $athleteId;
+            $linked = null;
+            foreach ($week as $day => $values) {
+                foreach (is_array($values) ? $values : [$values] as $sid) {
+                    if (!is_string($sid) || $sid === '') {
+                        continue;
+                    }
+                    if (!ctype_digit((string) $day) || (int) $day < 1 || (int) $day > 7 || !ctype_digit($sid) || !isset($sessionIndex[(int) $sid])) {
+                        self::fail($back, 'Seleção inválida: sessão não disponível (o modelo pode ter sido alterado). Nada foi criado.');
+                    }
+                    $linked ??= Workout::linkedModalities($t, $athleteId);
+                    if (!in_array($mod, $linked, true) || !in_array($sessionIndex[(int) $sid][0]['modality'], $linked, true)) {
+                        self::fail($back, 'Seleção inválida: atleta não vinculado a você em alguma das modalidades escolhidas. Nada foi criado.');
+                    }
+                    $plan[$athleteId][(int) $day][] = (int) $sid;
+                    if (count($plan[$athleteId][(int) $day]) > self::MAX_PER_DAY) {
+                        self::fail($back, 'Máximo de ' . self::MAX_PER_DAY . ' treinos no mesmo dia. Nada foi criado.');
+                    }
                 }
-                if (!ctype_digit((string) $day) || (int) $day < 1 || (int) $day > 7 || !ctype_digit($sid) || !isset($sessionIndex[(int) $sid])) {
-                    self::fail($back, 'Seleção inválida: sessão não disponível (o modelo pode ter sido alterado). Nada foi criado.');
-                }
-                if (!in_array($mod, Workout::linkedModalities($t, (int) $athleteId), true)) {
-                    self::fail($back, 'Seleção inválida: atleta não vinculado a você nesta modalidade. Nada foi criado.');
-                }
-                $plan[(int) $athleteId][(int) $day] = (int) $sid;
             }
         }
         if (!$plan) {
@@ -306,25 +322,27 @@ final class Templates
                     continue;
                 }
                 ksort($week);
-                foreach ($week as $day => $sid) {
-                    [$tpl, $sess] = $sessionIndex[$sid];
+                foreach ($week as $day => $sids) {
                     $date = (new \DateTimeImmutable($monday))->modify('+' . ($day - 1) . ' days')->format('Y-m-d');
-                    Db::run(
-                        'INSERT INTO workouts (athlete_id, modality_id, discipline, scheduled_date, title, notes, status, published_at, created_by, updated_by, source_template_id)
-                         VALUES (?,?,?,?,?,?,?,?,?,?,?)',
-                        [$athleteId, $modId, $sess['discipline'], $date, mb_substr($tpl['name'] . ' · ' . $sess['title'], 0, 120), $sess['notes'], $status,
-                            $status === 'published' ? date('Y-m-d H:i:s') : null, $t, $t, $tpl['id']]
-                    );
-                    $wid = (int) $pdo->lastInsertId();
-                    Db::run(
-                        'INSERT INTO workout_items (workout_id, position, label, sets, reps, load_text, rest_seconds, duration_minutes, distance_km, target, hr_zone, notes)
-                         SELECT ?, position, label, sets, reps, load_text, rest_seconds, duration_minutes, distance_km, target, hr_zone, notes
-                         FROM workout_template_items WHERE session_id = ? ORDER BY position',
-                        [$wid, $sid]
-                    );
-                    Workout::snapshot($wid, $status === 'published' ? 'published' : 'created', $t);
-                    Audit::log('workout_from_template', $t, 'workout', $wid, ['athlete_id' => $athleteId, 'template_id' => (int) $tpl['id']]);
-                    $created++;
+                    foreach ($sids as $sid) {
+                        [$tpl, $sess] = $sessionIndex[$sid];
+                        Db::run(
+                            'INSERT INTO workouts (athlete_id, modality_id, discipline, scheduled_date, title, notes, status, published_at, created_by, updated_by, source_template_id)
+                             VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+                            [$athleteId, $tpl['modality_id'], $sess['discipline'], $date, mb_substr($tpl['name'] . ' · ' . $sess['title'], 0, 120), $sess['notes'], $status,
+                                $status === 'published' ? date('Y-m-d H:i:s') : null, $t, $t, $tpl['id']]
+                        );
+                        $wid = (int) $pdo->lastInsertId();
+                        Db::run(
+                            'INSERT INTO workout_items (workout_id, position, label, sets, reps, load_text, rest_seconds, duration_minutes, distance_km, target, hr_zone, notes)
+                             SELECT ?, position, label, sets, reps, load_text, rest_seconds, duration_minutes, distance_km, target, hr_zone, notes
+                             FROM workout_template_items WHERE session_id = ? ORDER BY position',
+                            [$wid, $sid]
+                        );
+                        Workout::snapshot($wid, $status === 'published' ? 'published' : 'created', $t);
+                        Audit::log('workout_from_template', $t, 'workout', $wid, ['athlete_id' => $athleteId, 'template_id' => (int) $tpl['id']]);
+                        $created++;
+                    }
                 }
                 // Lembra os dias do atleta, se ainda não houver nenhum cadastrado.
                 Db::run("UPDATE trainer_athletes SET train_days = ? WHERE trainer_id = ? AND athlete_id = ? AND modality_id = ? AND (train_days IS NULL OR train_days = '')",
@@ -374,11 +392,13 @@ final class Templates
         return [$mod, (int) Workout::modalityId($mod), $monday, $back . '&semana=' . $monday];
     }
 
-    /** Modelos ativos do treinador na modalidade, com sessões (somente os que têm sessão). @return array<int,array<string,mixed>> */
-    private static function library(int $trainerId, int $modalityId): array
+    /** Modelos ativos do treinador (todas as modalidades), com sessões; só os que têm sessão. @return array<int,array<string,mixed>> */
+    private static function library(int $trainerId): array
     {
         $out = [];
-        foreach (Db::all('SELECT id, name, level_description FROM workout_templates WHERE trainer_id = ? AND modality_id = ? AND archived_at IS NULL ORDER BY name', [$trainerId, $modalityId]) as $t) {
+        foreach (Db::all('SELECT t.id, t.name, t.level_description, t.modality_id, m.slug AS modality, m.name AS modality_name
+                          FROM workout_templates t JOIN modalities m ON m.id = t.modality_id
+                          WHERE t.trainer_id = ? AND t.archived_at IS NULL ORDER BY m.id, t.name', [$trainerId]) as $t) {
             $t['sessions'] = self::sessions((int) $t['id']);
             if ($t['sessions']) {
                 $out[(int) $t['id']] = $t;

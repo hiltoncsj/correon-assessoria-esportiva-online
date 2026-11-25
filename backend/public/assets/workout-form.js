@@ -13,7 +13,7 @@
 		root.querySelectorAll('input[type=text], input:not([type]), textarea').forEach(function (el) { el.value = ''; });
 		root.querySelectorAll('select').forEach(function (el) { el.selectedIndex = 0; });
 	}
-	document.querySelectorAll('[data-add-row]').forEach(function (b) { b.hidden = false; });
+	document.querySelectorAll('[data-add-row], [data-add-slot]').forEach(function (b) { b.hidden = false; });
 	var addSession = document.querySelector('[data-add-session]');
 	if (addSession) { addSession.hidden = false; }
 
@@ -24,10 +24,22 @@
 		}
 	});
 	document.addEventListener('click', function (e) {
-		var t = e.target.closest ? e.target.closest('[data-add-row],[data-add-session],[data-confirm]') : null;
+		var t = e.target.closest ? e.target.closest('[data-add-row],[data-add-session],[data-add-slot],[data-confirm]') : null;
 		if (!t) { return; }
 		if (t.hasAttribute('data-confirm')) {
 			if (!window.confirm(t.getAttribute('data-confirm'))) { e.preventDefault(); }
+			return;
+		}
+		if (t.hasAttribute('data-add-slot')) {
+			var day = t.closest('[data-day]');
+			var slots = day.querySelectorAll('select[data-slot]');
+			if (slots.length >= 10) { return; }
+			var slot = slots[slots.length - 1].cloneNode(true);
+			slot.value = '';
+			slot.querySelectorAll('option').forEach(function (o) { o.removeAttribute('selected'); });
+			slot.selectedIndex = 0;
+			day.insertBefore(slot, t);
+			slot.focus();
 			return;
 		}
 		if (t.hasAttribute('data-add-row')) {
