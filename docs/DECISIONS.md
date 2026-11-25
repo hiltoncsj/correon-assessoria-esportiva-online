@@ -75,3 +75,8 @@ Substitui, no ajuste 2, o "dia fixo por sessão" e o envio direto pela tela de a
 - Os treinos do dia ficam na ordem escolhida no envio (não há horário).
 - A lista de pendentes continua valendo pela **modalidade escolhida no passo 1** e pela semana: quem já tem treino nela sai da lista. Para acrescentar um treino a quem já recebeu, usar "Novo treino" na página do atleta.
 - **Em aberto:** horário/turno por treino; acrescentar sessões de modelo a uma semana já enviada.
+
+## 2026-11-25 — Sprint 3, ajuste 6: "Excluir treino" na tela de aplicar
+- Em "Já com treino nesta semana" cada atleta tem **Excluir treino** (com confirmação). A ação **cancela** (não apaga) todos os treinos do atleta **na modalidade da aba e na semana exibida**, incluindo rascunhos e treinos criados avulsos, e o nome volta para a lista de pendentes. Histórico de versões e auditoria preservados; o atleta deixa de ver.
+- Treino **já registrado** pelo atleta nunca é cancelado; nesse caso o atleta continua na lista de quem já tem treino, com aviso.
+- Treinos de **outra modalidade** enviados na mesma semana não são afetados (excluir pela aba daquela modalidade).

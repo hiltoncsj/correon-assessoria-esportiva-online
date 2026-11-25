@@ -750,6 +750,37 @@ $d2 = array_column(Db::all('SELECT discipline FROM workouts WHERE athlete_id = ?
 check('natação, ciclismo e corrida no mesmo dia', $d2 === ['natacao', 'ciclismo', 'corrida']);
 check('natação e natação no mesmo dia', (int) Db::one("SELECT COUNT(*) c FROM workouts WHERE athlete_id = ? AND scheduled_date = ? AND discipline = 'natacao'", [$joaoId, date('Y-m-d', strtotime("$w10 +3 days"))])['c'] === 2);
 
+echo "Excluir treino pela tela de aplicar\n";
+$wkPage = "/treinador/modelos/aplicar?modalidade=corrida&semana=$w10";
+$del = static fn (int $athlete, string $week) => ['modality' => 'corrida', 'scheduled_date' => $week, 'athlete_id' => (string) $athlete];
+$active = static fn (int $a, string $week, string $mod) => (int) Db::one("SELECT COUNT(*) c FROM workouts w JOIN modalities m ON m.id = w.modality_id WHERE w.athlete_id = ? AND m.slug = ? AND w.status <> 'cancelled' AND w.scheduled_date BETWEEN ? AND ?", [$a, $mod, $week, date('Y-m-d', strtotime("$week +6 days"))])['c'];
+$totalBefore = (int) Db::one('SELECT COUNT(*) c FROM workouts')['c'];
+[$s, $b] = $tr1->req('GET', $wkPage);
+check('"Já com treino" tem o botão Excluir treino', $s === 200 && str_contains($b, 'aria-label="Excluir treino de Maria Teste"') && !str_contains($b, 'data-athlete="' . $mariaId . '"'));
+[$s] = $mar->req('POST', '/treinador/modelos/excluir', $del($mariaId, $w10));
+check('atleta não exclui treino (403/419)', in_array($s, [403, 419], true) && $active($mariaId, $w10, 'corrida') === 4);
+[$s] = $tr2->post('/treinador/modelos/excluir', ['modality' => 'musculacao'] + $del($mariaId, $w10), '/treinador/modelos');
+check('treinador sem vínculo não exclui (404)', $s === 404 && $active($mariaId, $w10, 'musculacao') === 1);
+[$s] = $anon->req('POST', '/treinador/modelos/excluir', $del($mariaId, $w10));
+check('excluir sem CSRF = 419', $s === 419);
+[$s] = $tr1->post('/treinador/modelos/excluir', $del($mariaId, $w10), $stepOne);
+check('excluir os treinos da semana (4 de corrida cancelados)', $s === 303 && $active($mariaId, $w10, 'corrida') === 0);
+check('nada é apagado: os treinos ficam como Cancelado, com histórico', (int) Db::one('SELECT COUNT(*) c FROM workouts')['c'] === $totalBefore
+    && (int) Db::one("SELECT COUNT(*) c FROM workout_versions v JOIN workouts w ON w.id = v.workout_id WHERE w.athlete_id = ? AND v.change_note = 'cancelled' AND w.scheduled_date >= ?", [$mariaId, $w10])['c'] === 4);
+check('treino de outra modalidade (musculação) não é tocado', $active($mariaId, $w10, 'musculacao') === 1);
+[$s, $b] = $tr1->req('GET', $wkPage);
+check('o nome VOLTA para a lista inicial', str_contains($b, 'data-athlete="' . $mariaId . '"') && !str_contains($b, 'aria-label="Excluir treino de Maria Teste"'));
+[$s, $b] = $mar->req('GET', '/app/treinos?mes=' . substr($w10, 0, 7));
+check('os treinos excluídos somem para o atleta', !str_contains($b, 'Tiro manhã') && str_contains($b, 'Força · Pernas'));
+$tr1->post('/treinador/modelos/aplicar', $send([$mariaId => [2 => [(string) $r[0]]]], ['scheduled_date' => $w10]), $stepOne);
+check('depois de excluir dá para enviar de novo', $active($mariaId, $w10, 'corrida') === 1);
+
+$logged = (int) Db::one('SELECT COUNT(*) c FROM workout_logs l JOIN workouts w ON w.id = l.workout_id WHERE w.athlete_id = ? AND w.scheduled_date BETWEEN ? AND ?', [$mariaId, $mon, date('Y-m-d', strtotime("$mon +6 days"))])['c'];
+$tr1->post('/treinador/modelos/excluir', $del($mariaId, $mon), $stepOne);
+check('treino já registrado pelo atleta é mantido', $logged >= 1 && $active($mariaId, $mon, 'corrida') === $logged);
+[$s, $b] = $tr1->req('GET', "/treinador/modelos/aplicar?modalidade=corrida&semana=$mon");
+check('...e a tela avisa que há treino registrado (sem botão se não sobrou nada a excluir)', str_contains($b, 'já registrado(s)') && !str_contains($b, 'aria-label="Excluir treino de Maria Teste"'));
+
 echo "Tela geral de Zonas de FC\n";
 [$s, $b] = $tr1->req('GET', '/treinador/zonas');
 check('lista todos os atletas do treinador com as 7 zonas', $s === 200 && str_contains($b, 'Maria Teste') && str_contains($b, 'Ana Corredora') && str_contains($b, 'Carlos Novo') && str_contains($b, 'z[' . $anaId . '][zones][7][min]'));

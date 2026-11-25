@@ -68,6 +68,16 @@ $modNames = ['corrida' => 'Corrida', 'triathlon' => 'Triathlon', 'musculacao' =>
 						<a href="/treinador/atletas/<?= (int) $a['id'] ?>"><?= e($a['name']) ?></a>
 						<?php if (str_contains((string) $a['week_status'], 'published')): ?><span class="badge badge--ok">Enviado</span><?php endif; ?>
 						<?php if (str_contains((string) $a['week_status'], 'draft')): ?><span class="badge badge--draft">Rascunho</span><?php endif; ?>
+						<span class="muted"><?= (int) $a['removable'] + (int) $a['logged'] ?> treino(s)<?= (int) $a['logged'] ? ' · ' . (int) $a['logged'] . ' já registrado(s)' : '' ?></span>
+						<?php if ((int) $a['removable'] > 0): ?>
+							<form method="post" action="/treinador/modelos/excluir">
+								<input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
+								<input type="hidden" name="modality" value="<?= e($mod) ?>">
+								<input type="hidden" name="scheduled_date" value="<?= e($monday) ?>">
+								<input type="hidden" name="athlete_id" value="<?= (int) $a['id'] ?>">
+								<button class="btn btn--sm btn--danger" type="submit" data-confirm="Excluir os treinos de <?= e($a['name']) ?> (<?= e($modNames[$mod] ?? $mod) ?>) desta semana? Eles somem para o atleta." aria-label="Excluir treino de <?= e($a['name']) ?>">Excluir treino</button>
+							</form>
+						<?php endif; ?>
 					</li>
 				<?php endforeach; ?>
 			</ul>

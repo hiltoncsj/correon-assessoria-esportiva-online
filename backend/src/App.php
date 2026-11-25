@@ -40,7 +40,7 @@ final class App
             'GET /app/modalidades' => 'soon:modalidades', 'GET /app/treinos' => 'Athlete@workouts',
             'GET /app/treinador' => 'Athlete@trainers', 'GET /app/assinaturas' => 'soon:assinaturas',
             'GET /treinador' => 'Trainer@home', 'GET /treinador/modelos' => 'Templates@index', 'GET /treinador/modelos/novo' => 'Templates@newForm',
-            'POST /treinador/modelos/novo' => 'Templates@create', 'GET /treinador/modelos/aplicar' => 'Templates@applyForm', 'POST /treinador/modelos/montar' => 'Templates@plan',
+            'POST /treinador/modelos/novo' => 'Templates@create', 'GET /treinador/modelos/aplicar' => 'Templates@applyForm', 'POST /treinador/modelos/montar' => 'Templates@plan', 'POST /treinador/modelos/excluir' => 'Templates@removeWeek',
             'GET /treinador/zonas' => 'Trainer@zonesAll', 'POST /treinador/zonas' => 'Trainer@zonesAllSave', 'POST /treinador/modelos/aplicar' => 'Templates@applySave',
             'GET /treinador/treinos/novo' => 'Trainer@newForm', 'POST /treinador/treinos/novo' => 'Trainer@create',
             'GET /admin' => 'adminHome',

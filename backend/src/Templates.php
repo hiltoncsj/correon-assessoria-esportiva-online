@@ -185,10 +185,16 @@ final class Templates
                    (SELECT COUNT(*) FROM athlete_hr_zones z WHERE z.athlete_id = a.id) AS zone_count,
                    (SELECT GROUP_CONCAT(DISTINCT w.status ORDER BY w.status) FROM workouts w
                       WHERE w.athlete_id = a.id AND w.modality_id = ta.modality_id AND w.status <> 'cancelled'
-                        AND w.scheduled_date BETWEEN ? AND ?) AS week_status
+                        AND w.scheduled_date BETWEEN ? AND ?) AS week_status,
+                   (SELECT COUNT(*) FROM workouts w2 LEFT JOIN workout_logs l ON l.workout_id = w2.id
+                      WHERE w2.athlete_id = a.id AND w2.modality_id = ta.modality_id AND w2.status <> 'cancelled'
+                        AND w2.scheduled_date BETWEEN ? AND ? AND l.id IS NULL) AS removable,
+                   (SELECT COUNT(*) FROM workouts w3 JOIN workout_logs l3 ON l3.workout_id = w3.id
+                      WHERE w3.athlete_id = a.id AND w3.modality_id = ta.modality_id AND w3.status <> 'cancelled'
+                        AND w3.scheduled_date BETWEEN ? AND ?) AS logged
                  FROM trainer_athletes ta JOIN users a ON a.id = ta.athlete_id JOIN modalities m ON m.id = ta.modality_id
                  WHERE ta.trainer_id = ? AND m.slug = ? AND ta.status = 'active' ORDER BY a.name",
-                [$monday, $sunday, $u['id'], $mod]
+                [$monday, $sunday, $monday, $sunday, $monday, $sunday, $u['id'], $mod]
             );
             foreach ($athletes as $a) {
                 if ($a['week_status'] === null) {
@@ -417,6 +423,58 @@ final class Templates
     private static function fail(string $back, string $message): never
     {
         Http::flash('err', $message);
+        Http::redirect($back);
+    }
+
+    /**
+     * "Excluir treino" na tela de aplicar: CANCELA (não apaga) os treinos do atleta na modalidade e semana,
+     * para ele voltar à lista de pendentes. Treinos já registrados pelo atleta são preservados.
+     */
+    public static function removeWeek(): never
+    {
+        $u = App::require('trainer');
+        $t = (int) $u['id'];
+        [$mod, $modId, $monday, $back] = self::weekContext($t);
+        $athleteId = (int) Http::input('athlete_id');
+        if (!in_array($mod, Workout::linkedModalities($t, $athleteId), true)) {
+            App::notFound();
+        }
+        $sunday = (new \DateTimeImmutable($monday))->modify('+6 days')->format('Y-m-d');
+        $name = (string) (Db::one('SELECT name FROM users WHERE id = ?', [$athleteId])['name'] ?? '');
+
+        $removed = 0;
+        $kept = 0;
+        $pdo = Db::pdo();
+        $pdo->beginTransaction();
+        try {
+            $rows = Db::all(
+                "SELECT w.id, (SELECT COUNT(*) FROM workout_logs l WHERE l.workout_id = w.id) AS logged
+                 FROM workouts w WHERE w.athlete_id = ? AND w.modality_id = ? AND w.status <> 'cancelled' AND w.scheduled_date BETWEEN ? AND ? FOR UPDATE",
+                [$athleteId, $modId, $monday, $sunday]
+            );
+            foreach ($rows as $w) {
+                if ((int) $w['logged'] > 0) {
+                    $kept++;
+                    continue;
+                }
+                Db::run("UPDATE workouts SET status = 'cancelled', version = version + 1, updated_by = ? WHERE id = ?", [$t, $w['id']]);
+                Workout::snapshot((int) $w['id'], 'cancelled', $t);
+                Audit::log('workout_cancelled', $t, 'workout', (int) $w['id'], ['athlete_id' => $athleteId]);
+                $removed++;
+            }
+            $pdo->commit();
+        } catch (\Throwable $e) {
+            $pdo->rollBack();
+            throw $e;
+        }
+        if (!$removed && !$kept) {
+            self::fail($back, $name . ' não tem treino nesta semana.');
+        }
+        $msg = $removed . ' treino(s) de ' . $name . ' excluído(s) desta semana.';
+        if ($kept) {
+            $msg .= ' ' . $kept . ' treino(s) já registrado(s) pelo atleta foram mantidos, por isso ele continua na lista de quem já tem treino.';
+        }
+        Http::flash($removed ? 'ok' : 'err', $msg);
         Http::redirect($back);
     }
 
