@@ -4,8 +4,9 @@
  * Regras:
  *  - `null` = preço ainda não definido pela administração. A interface mostra
  *    "Em breve" e NÃO permite contratar esse período.
- *  - Só o preço mensal para NOVOS alunos está definido (R$ 150,00 por modalidade).
- *  - Trimestral, semestral e anual: não inventar valores nem descontos.
+ *  - Preços para NOVOS alunos, por modalidade (valor TOTAL do período): mensal R$ 180,
+ *    trimestral R$ 480 (até 3x), semestral R$ 840 (até 6x), anual R$ 1.440 (até 12x).
+ *  - Não afirmar "sem juros": juros do parcelamento ainda não foram definidos.
  *  - O preço legado de alunos antigos NÃO fica neste arquivo (é público no
  *    navegador). Ele pertence ao backend/cadastro, que ainda não existe.
  *  - Estes valores são só de exibição. A validação final do preço
@@ -41,11 +42,14 @@ export const modalities: { id: ModalityId; name: string; description: string }[]
 	},
 ];
 
-/** Preço em reais por modalidade e período (novos alunos). */
+/** Número máximo de parcelas de cada período (1 = à vista). */
+export const installments: Record<PeriodId, number> = { mensal: 1, trimestral: 3, semestral: 6, anual: 12 };
+
+/** Preço TOTAL em reais por modalidade e período (novos alunos). */
 export const prices: Record<ModalityId, Record<PeriodId, number | null>> = {
-	corrida: { mensal: 150, trimestral: null, semestral: null, anual: null },
-	triathlon: { mensal: 150, trimestral: null, semestral: null, anual: null },
-	musculacao: { mensal: 150, trimestral: null, semestral: null, anual: null },
+	corrida: { mensal: 180, trimestral: 480, semestral: 840, anual: 1440 },
+	triathlon: { mensal: 180, trimestral: 480, semestral: 840, anual: 1440 },
+	musculacao: { mensal: 180, trimestral: 480, semestral: 840, anual: 1440 },
 };
 
 /**
@@ -59,7 +63,8 @@ export const exclusiveGroups: ModalityId[][] = [['corrida', 'triathlon']];
  * modalidades da combinação estão no mesmo período e há preço definido nele;
  * caso contrário, soma os preços individuais. Combinações que não existem
  * (Corrida + Triathlon, as três juntas) são impedidas por `exclusiveGroups`.
- * Musculação sozinha continua com o preço individual (R$ 150/mês).
+ * Musculação sozinha usa o preço individual. O combo só tem preço definido no mensal
+ * (R$ 200); nos demais períodos a página soma os preços individuais.
  */
 export const bundles: { modalities: ModalityId[]; prices: Record<PeriodId, number | null> }[] = [
 	{

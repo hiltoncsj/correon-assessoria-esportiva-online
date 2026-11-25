@@ -97,3 +97,13 @@ Substitui, no ajuste 2, o "dia fixo por sessão" e o envio direto pela tela de a
 - **Contas:** bloquear desconecta na hora (`session_version`) e impede login; reativar devolve o acesso. "Gerar link de senha" para atletas e treinadores. **Contas de administrador não são geridas pela tela** (criar/bloquear só por linha de comando), por segurança.
 - **Relatórios:** por treinador (4 semanas: atletas, publicados, realizados, sem registro, adesão) e por modalidade. **Auditoria:** filtro por ação e dia, 50 por página, somente leitura.
 - **Fora desta sprint (dependem de etapas futuras):** produtos/planos/preços, contratos, assinaturas, financeiro e inadimplência (Sprint 6); Personal Trainer e agenda presencial (Sprint 7); notícias, eventos e resultados (Sprint 8); edição de modalidades, papéis personalizados e configurações gerais (sem necessidade concreta ainda).
+
+## 2026-11-25 — Preços informados pelo cliente (substituem o mensal de R$ 150)
+| Período | Total | Parcelamento |
+|---|---|---|
+| Mensal | R$ 180 | — |
+| Trimestral | R$ 480 | até 3x de R$ 160 |
+| Semestral | R$ 840 | até 6x de R$ 140 |
+| Anual | R$ 1.440 | até 12x de R$ 120 |
+
+Aplicado na Hero 6 (`src/data/plans.ts`). **Premissas a confirmar:** (1) valores valem para cada modalidade; (2) R$ 180 substitui os R$ 150 para novos alunos; (3) o combo de R$ 200 continua só no mensal — trimestral/semestral/anual combinados mostram a soma dos individuais; (4) juros do parcelamento não definidos (a página não afirma "sem juros"). Continuam em aberto: preço do combo nos demais períodos, aluno antigo (R$ 120/mês), se as parcelas são no cartão (total garantido) ou cobrança recorrente, preços do Personal Trainer, gateway, prazo de inadimplência e cancelamento.

@@ -3,7 +3,7 @@ import { Image } from 'astro:assets';
 import imgCorrida from '../assets/PlanoCorrida.png';
 import imgTriathlon from '../assets/PlanoTriathlon.png';
 import imgMusculacao from '../assets/PlanoMusculacao.png';
-import { modalities, periods, prices, bundles, exclusiveGroups, benefits, personalFormats } from '../data/plans';
+import { modalities, periods, prices, installments, bundles, exclusiveGroups, benefits, personalFormats } from '../data/plans';
 
 // Hero 06 — escolha de modalidade e periodicidade, com resumo da contratação.
 // Preços e regras comerciais vivem em src/data/plans.ts. Sem JS, os controles
@@ -38,6 +38,7 @@ const brl = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' 
 	data-plans
 	data-prices={JSON.stringify(prices)}
 	data-periods={JSON.stringify(periods)}
+	data-installments={JSON.stringify(installments)}
 	data-bundles={JSON.stringify(bundles)}
 	data-exclusive={JSON.stringify(exclusiveGroups)}
 >
@@ -99,6 +100,9 @@ const brl = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' 
 											/>
 											<span class="opt__label">{p.label}</span>
 											<span class="opt__price">{price === null ? 'Em breve' : brl.format(price)}</span>
+											{price !== null && installments[p.id] > 1 && (
+												<span class="opt__split">até {installments[p.id]}x de {brl.format(price / installments[p.id])}</span>
+											)}
 										</label>
 									);
 								})}
@@ -388,6 +392,10 @@ const brl = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' 
 		font: 400 var(--text-label) / 1.2 var(--font-body);
 		color: var(--color-text-secondary);
 	}
+	.opt__split {
+		font: 400 0.75rem / 1.2 var(--font-body);
+		color: var(--color-text-secondary);
+	}
 	.opt:has(.opt__input:checked) .opt__price {
 		color: var(--color-accent);
 	}
@@ -645,6 +653,7 @@ const brl = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' 
 			(JSON.parse(root.dataset.periods ?? '[]') as { id: string; label: string }[]).map((p) => [p.id, p.label]),
 		);
 		const brl = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+		const parcels: Record<string, number> = JSON.parse(root.dataset.installments ?? '{}');
 
 		const mods = root.querySelectorAll<HTMLElement>('[data-mod]');
 		const list = root.querySelector<HTMLElement>('[data-lines]')!;
@@ -739,6 +748,13 @@ const brl = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' 
 					}
 				}
 				li.append(name, val);
+				const n = parcels[l.period] ?? 1;
+				if (l.price !== null && n > 1) {
+					const split = document.createElement('span');
+					split.className = 'line__note';
+					split.textContent = `até ${n}x de ${brl.format(l.price / n)}`;
+					li.append(split);
+				}
 				if (l.combo && l.original !== undefined && l.price !== null && l.original > l.price) {
 					const diff = l.original - l.price;
 					saving += diff;
