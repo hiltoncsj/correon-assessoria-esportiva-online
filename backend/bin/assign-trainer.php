@@ -35,6 +35,10 @@ if ($r['result'] === Assignment::INVALID) {
     fwrite(STDERR, "Treinador, atleta ou modalidade não encontrados (o e-mail precisa ter o perfil correto).\n");
     exit(1);
 }
+if ($r['result'] === Assignment::NOT_ATTENDED) {
+    fwrite(STDERR, "O treinador não atende essa modalidade. Marque-a na página do treinador (painel do administrador).\n");
+    exit(1);
+}
 $c = Capacity::status($t);
 if ($r['result'] === Assignment::BLOCKED) {
     fwrite(STDERR, "BLOQUEADO: treinador no limite ({$c['active']} de {$c['limit']} atletas). Para abrir exceção, acrescente --excecao=\"motivo\".\n");

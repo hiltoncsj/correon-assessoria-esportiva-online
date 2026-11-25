@@ -19,6 +19,23 @@
 	var addSession = document.querySelector('[data-add-session]');
 	if (addSession) { addSession.hidden = false; }
 
+	// Atribuição: mostra só os treinadores que atendem a modalidade escolhida.
+	var source = document.querySelector('[data-filter-source]');
+	var target = document.querySelector('[data-filter-target]');
+	if (source && target) {
+		var options = Array.prototype.slice.call(target.querySelectorAll('option[data-mods]'));
+		var apply = function () {
+			var mod = source.value;
+			options.forEach(function (o) {
+				var show = !mod || o.getAttribute('data-mods').split(' ').indexOf(mod) !== -1;
+				if (!show && o.selected) { target.value = ''; }
+				if (show && !o.parentNode) { target.appendChild(o); }
+				if (!show && o.parentNode) { target.removeChild(o); }
+			});
+		};
+		source.addEventListener('change', apply);
+		apply();
+	}
 	document.addEventListener('change', function (e) {
 		var el = e.target;
 		if (el.matches && el.matches('input[data-athlete]') && el.checked) {

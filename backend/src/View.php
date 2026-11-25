@@ -9,6 +9,12 @@ final class View
         return htmlspecialchars((string) $s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
     }
 
+    /** Página principal (Landing). Em produção é "/"; em desenvolvimento use SITE_URL no .env. */
+    public static function site(): string
+    {
+        return (string) Env::get('SITE_URL', '/');
+    }
+
     /** URL de um arquivo estático com a versão (data de modificação), para o navegador não usar cópia antiga. */
     public static function asset(string $path): string
     {

@@ -13,7 +13,7 @@
 <body>
 	<a class="skip" href="#conteudo">Pular para o conteúdo</a>
 	<header class="bar">
-		<a class="bar__brand" href="/" aria-label="CorreON — página inicial"><img src="/assets/logo-correon.png" alt="CorreON" height="40"></a>
+		<a class="bar__brand" href="<?= e(\Correon\View::site()) ?>" aria-label="CorreON — página inicial"><img src="/assets/logo-correon.png" alt="CorreON" height="40"></a>
 		<?php if ($user): ?>
 			<form class="bar__user" method="post" action="/sair">
 				<input type="hidden" name="_csrf" value="<?= e($csrf) ?>">

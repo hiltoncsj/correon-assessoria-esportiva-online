@@ -55,7 +55,7 @@ final class App
             'GET /admin' => 'Admin@home', 'GET /admin/conteudo' => 'ContentPages@index', 'GET /admin/conteudo/novo' => 'ContentPages@newForm',
             'POST /admin/conteudo' => 'ContentPages@create', 'GET /admin/comunicados' => 'ContentPages@announcements', 'POST /admin/comunicados' => 'ContentPages@announce',
             'GET /app/avisos' => 'ContentPages@notices', 'GET /app/privacidade' => 'ContentPages@privacy', 'POST /app/privacidade' => 'ContentPages@savePrivacy', 'GET /admin/precos' => 'Finance@prices', 'POST /admin/precos' => 'Finance@savePrices',
-            'GET /admin/contratos' => 'Finance@contracts', 'GET /admin/financeiro' => 'Finance@overview', 'GET /admin/atletas' => 'Admin@athletes', 'GET /admin/treinadores' => 'Admin@trainers',
+            'GET /admin/contratos' => 'Finance@contracts', 'GET /admin/financeiro' => 'Finance@overview', 'GET /admin/atletas' => 'Admin@athletes', 'POST /admin/atletas' => 'Admin@createAthlete', 'GET /admin/treinadores' => 'Admin@trainers',
             'POST /admin/treinadores' => 'Admin@createTrainer', 'GET /admin/relatorios' => 'Admin@reports', 'GET /admin/auditoria' => 'Admin@audit',
             'GET /termos' => 'terms', 'GET /privacidade' => 'privacy',
         ];
@@ -91,6 +91,7 @@ final class App
             ['POST', '#^/admin/atletas/(\d+)/vinculos/encerrar$#', 'Admin@unassign'],
             ['GET', '#^/admin/treinadores/(\d+)$#', 'Admin@trainer'],
             ['POST', '#^/admin/treinadores/(\d+)/capacidade$#', 'Admin@setCapacity'],
+            ['POST', '#^/admin/treinadores/(\d+)/modalidades$#', 'Admin@setModalities'],
             ['POST', '#^/admin/usuarios/(\d+)/status$#', 'Admin@setStatus'],
             ['POST', '#^/admin/usuarios/(\d+)/senha$#', 'Admin@resetPassword'],
             ['POST', '#^/admin/usuarios/(\d+)/excluir$#', 'Admin@deleteTrainer'],
@@ -210,8 +211,8 @@ final class App
 
     private static function firstPasswordForm(): never
     {
-        self::pendingUser();
-        View::render('auth/first_password', ['title' => 'Crie a sua senha', 'error' => null]);
+        $u = self::pendingUser();
+        View::render('auth/first_password', ['title' => 'Crie a sua senha', 'error' => null, 'needsTerms' => Auth::needsTerms((int) $u['id'])]);
     }
 
     private static function firstPassword(): never
@@ -224,8 +225,15 @@ final class App
         if ($err === null && password_verify($new, $hash)) {
             $err = 'Escolha uma senha diferente da provisória.';
         }
+        $needsTerms = Auth::needsTerms($id);
+        if ($err === null && $needsTerms && Http::input('accept') !== '1') {
+            $err = 'É necessário aceitar os Termos de Uso e a Política de Privacidade.';
+        }
         if ($err !== null) {
-            View::render('auth/first_password', ['title' => 'Crie a sua senha', 'error' => $err], 422);
+            View::render('auth/first_password', ['title' => 'Crie a sua senha', 'error' => $err, 'needsTerms' => $needsTerms], 422);
+        }
+        if ($needsTerms) {
+            Auth::acceptTerms($id);
         }
         Db::run('UPDATE users SET password_hash = ?, must_change_password = 0, session_version = session_version + 1 WHERE id = ?', [password_hash($new, PASSWORD_DEFAULT), $id]);
         Auth::login($id);
@@ -362,7 +370,7 @@ final class App
                 $pdo->rollBack();
                 View::render('auth/reset_invalid', ['title' => 'Link inválido'], 410);
             }
-            Db::run('UPDATE users SET password_hash = ?, must_change_password = 0, session_version = session_version + 1 WHERE id = ?', [password_hash($pass, PASSWORD_DEFAULT), $row['user_id']]);
+            Db::run('UPDATE users SET password_hash = ?, must_change_password = ?, session_version = session_version + 1 WHERE id = ?', [password_hash($pass, PASSWORD_DEFAULT), Auth::needsTerms((int) $row['user_id']) ? 1 : 0, $row['user_id']]);
             Db::run('UPDATE password_resets SET used_at = NOW() WHERE user_id = ? AND used_at IS NULL', [$row['user_id']]);
             $pdo->commit();
         } catch (\Throwable $e) {

@@ -299,3 +299,7 @@ input[type=file] { color: var(--color-text-secondary); }
 .form { grid-template-columns: minmax(0, 1fr); }
 .field input, .field select, .field textarea { width: 100%; min-width: 0; max-width: 100%; }
 .field input[type="file"] { padding-block: var(--space-xs); }
+
+.newbox { margin-bottom: var(--space-lg); }
+.newbox summary { cursor: pointer; font: 700 1rem / 1.4 var(--font-heading); color: var(--color-accent); text-transform: uppercase; }
+.newbox[open] summary { margin-bottom: var(--space-md); }

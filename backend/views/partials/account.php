@@ -5,6 +5,7 @@
 		<dt>E-mail</dt><dd><?= e($person['email']) ?></dd>
 		<dt>Situação</dt><dd><?= $person['status'] === 'active' ? 'Ativa' : 'Bloqueada' ?></dd>
 		<dt>Cadastro</dt><dd><?= e(date('d/m/Y', strtotime($person['created_at']))) ?></dd>
+		<?php if (!empty($person['must_change_password'])): ?><dt>Primeiro acesso</dt><dd><span class="badge badge--draft">aguardando (senha provisória)</span></dd><?php endif; ?>
 		<dt>Último acesso</dt><dd><?= $person['last_login_at'] ? e(date('d/m/Y H:i', strtotime($person['last_login_at']))) : 'Nunca' ?></dd>
 	</dl>
 	<div class="actions">

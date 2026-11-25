@@ -103,6 +103,20 @@ final class Auth
         return null;
     }
 
+    /** Atleta que ainda não aceitou os Termos (conta criada pela administração). */
+    public static function needsTerms(int $userId): bool
+    {
+        return Db::one("SELECT 1 ok FROM user_roles ur JOIN roles r ON r.id = ur.role_id AND r.slug = 'athlete' WHERE ur.user_id = ?", [$userId]) !== null
+            && Db::one("SELECT id FROM consents WHERE user_id = ? AND type = 'termos' LIMIT 1", [$userId]) === null;
+    }
+
+    public static function acceptTerms(int $userId): void
+    {
+        foreach (['termos', 'privacidade'] as $type) {
+            Db::run('INSERT INTO consents (user_id, type, version, ip) VALUES (?,?,?,?)', [$userId, $type, self::CONSENT_VERSION, Http::ip()]);
+        }
+    }
+
     /**
      * Cria um usuário com perfil. Cadastro público usa sempre 'athlete'.
      * @throws \PDOException e-mail duplicado (SQLSTATE 23000)

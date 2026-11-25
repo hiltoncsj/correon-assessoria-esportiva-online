@@ -15,14 +15,10 @@ final class Templates
     public const MAX_SESSIONS = 100; // teto técnico de segurança; não é regra de negócio
     public const DAY_SHORT = [1 => 'Seg', 2 => 'Ter', 3 => 'Qua', 4 => 'Qui', 5 => 'Sex', 6 => 'Sáb', 7 => 'Dom'];
 
-    /** @return list<string> modalidades em que o treinador tem ao menos um atleta ativo */
+    /** @return list<string> modalidades que o treinador atende (definidas pelo administrador) */
     public static function modalities(int $trainerId): array
     {
-        return array_column(Db::all(
-            "SELECT m.slug FROM trainer_athletes ta JOIN modalities m ON m.id = ta.modality_id
-             WHERE ta.trainer_id = ? AND ta.status = 'active' GROUP BY m.id, m.slug ORDER BY m.id",
-            [$trainerId]
-        ), 'slug');
+        return Assignment::modalities($trainerId);
     }
 
     /** Modelo do próprio treinador; senão 404. @return array<string,mixed> */

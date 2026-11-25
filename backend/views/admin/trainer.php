@@ -4,6 +4,21 @@ use Correon\Templates;
 <p class="eyebrow"><a href="/admin/treinadores">← Treinadores</a></p>
 <h1><?= e($person['name']) ?></h1>
 
+<section class="tile" aria-labelledby="h-mod">
+	<h2 id="h-mod">Modalidades que atende</h2>
+	<?php if (!$attends): ?><p class="notice">Sem modalidade definida: este treinador ainda não pode receber atletas.</p><?php endif; ?>
+	<form class="form form--inline" method="post" action="/admin/treinadores/<?= (int) $person['id'] ?>/modalidades">
+		<input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
+		<fieldset class="days">
+			<legend>Marque uma ou mais</legend>
+			<?php foreach ($modalities as $slug => $label): ?>
+				<label class="days__d"><input type="checkbox" name="modalities[]" value="<?= e($slug) ?>"<?= in_array($slug, $attends, true) ? ' checked' : '' ?>> <?= e($label) ?></label>
+			<?php endforeach; ?>
+		</fieldset>
+		<button class="btn btn--sm" type="submit">Salvar modalidades</button>
+	</form>
+</section>
+
 <section class="tile" aria-labelledby="h-cap">
 	<h2 id="h-cap">Capacidade</h2>
 	<p class="stat"><?= (int) $capacity['active'] ?><small> / <?= (int) $capacity['limit'] ?> atletas online (<?= (int) $capacity['pct'] ?>%)</small></p>

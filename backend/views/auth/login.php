@@ -12,4 +12,5 @@
 		<button class="btn" type="submit">Entrar</button>
 	</form>
 	<p class="links"><a href="/recuperar-senha">Esqueci minha senha</a> · <a href="/cadastro">Criar conta</a></p>
+	<p class="links"><a href="<?= e(\Correon\View::site()) ?>">← Voltar para o site</a></p>
 </section>

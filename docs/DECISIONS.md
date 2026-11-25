@@ -146,3 +146,8 @@ Aplicado na Hero 6 (`src/data/plans.ts`). **Premissas a confirmar:** (1) valores
 - Integrações (For All Sports, multiagentes) continuam em espera; nada foi publicado.
 - **Senha provisória (pedido do cliente):** ao cadastrar treinador o admin pode definir uma senha provisória (10+); no primeiro acesso a troca é obrigatória antes de qualquer tela. Em branco, continua o link de uso único.
 - **Excluir conta de treinador (pedido do cliente):** sem registros = apagada; com histórico = desativada, fora das listas, e-mail liberado, histórico preservado (nome com "(excluído)"). Recusada se houver atletas, Personal ativo ou sessões pendentes. Não vale para atletas nem administradores (exclusão de dados de atleta é decisão LGPD pendente).
+
+## 2026-11-25 — Modalidades do treinador, cadastro de atleta pelo admin e retorno ao site
+- **Modalidades do treinador** (`trainer_modalities`): marcadas no cadastro ou na página do treinador. A atribuição só aceita modalidade atendida (tela, script e servidor); não se retira modalidade com atletas ativos; o treinador cria modelos nas modalidades que atende. Treinadores existentes foram preenchidos pelas modalidades com atletas ativos.
+- **Admin cadastra atleta** com senha provisória (10+) e, opcionalmente, já vincula treinador. No primeiro acesso o atleta troca a senha e **ele mesmo aceita os Termos** (o admin não aceita por ele); recuperar a senha por e-mail não pula o aceite.
+- **Voltar para o site:** link nas telas de entrada e no logotipo. Em produção é `/`; no computador local, `SITE_URL` no `.env` (o roteador de desenvolvimento também redireciona `/`).

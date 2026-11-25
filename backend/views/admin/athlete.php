@@ -49,21 +49,22 @@
 		<form class="form" method="post" action="/admin/atletas/<?= (int) $person['id'] ?>/vinculos" novalidate>
 			<input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
 			<div class="row">
-				<label class="field">Treinador
-					<select name="trainer_id">
-						<option value="">—</option>
-						<?php foreach ($trainers as $t): ?>
-							<option value="<?= (int) $t['id'] ?>"><?= e($t['name']) ?> (<?= (int) $t['capacity']['active'] ?>/<?= (int) $t['capacity']['limit'] ?><?= $t['capacity']['state'] === 'full' ? ', esgotado' : '' ?>)</option>
-						<?php endforeach; ?>
-					</select>
-				</label>
 				<label class="field">Modalidade
-					<select name="modality">
+					<select name="modality" data-filter-source>
 						<option value="">—</option>
 						<?php foreach ($modalities as $slug => $name): ?><option value="<?= e($slug) ?>"><?= e($name) ?></option><?php endforeach; ?>
 					</select>
 				</label>
+				<label class="field">Treinador
+					<select name="trainer_id" data-filter-target>
+						<option value="">—</option>
+						<?php foreach ($trainers as $t): if (!$t['modalities']) { continue; } ?>
+							<option value="<?= (int) $t['id'] ?>" data-mods="<?= e(implode(' ', $t['modalities'])) ?>"><?= e($t['name']) ?> (<?= (int) $t['capacity']['active'] ?>/<?= (int) $t['capacity']['limit'] ?><?= $t['capacity']['state'] === 'full' ? ', esgotado' : '' ?>) — <?= e(implode(', ', array_map(static fn ($s) => $modalities[$s], $t['modalities']))) ?></option>
+						<?php endforeach; ?>
+					</select>
+				</label>
 			</div>
+			<p class="muted">Aparecem os treinadores que atendem a modalidade escolhida. Defina as modalidades na página de cada treinador.</p>
 			<label class="field">Motivo da exceção (só se o treinador estiver no limite)
 				<input type="text" name="reason" maxlength="300">
 			</label>

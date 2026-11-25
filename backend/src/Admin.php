@@ -55,6 +55,7 @@ final class Admin
         $rows = Db::all('SELECT u.id, u.name, u.email, u.status FROM ' . self::withRole('trainer') . ' ORDER BY u.name');
         foreach ($rows as &$r) {
             $r['capacity'] = Capacity::status((int) $r['id']);
+            $r['modalities'] = Assignment::modalities((int) $r['id']);
         }
         unset($r);
         return $rows;
@@ -65,6 +66,66 @@ final class Admin
     public static function athletes(): never
     {
         self::admin();
+        self::athletesView(['name' => '', 'email' => '', 'trainer_id' => '', 'modality' => ''], null, 200);
+    }
+
+    /**
+     * Cadastro de atleta pela administração, com senha provisória. O aceite dos Termos é feito pelo próprio
+     * atleta no primeiro acesso. Treinador e modalidade são opcionais.
+     */
+    public static function createAthlete(): never
+    {
+        $me = self::admin();
+        $old = [
+            'name' => trim(preg_replace('/\s+/u', ' ', Http::input('name')) ?? ''),
+            'email' => strtolower(Http::input('email')),
+            'trainer_id' => Http::input('trainer_id'),
+            'modality' => Http::input('modality'),
+        ];
+        $temp = (string) ($_POST['temp_password'] ?? '');
+        if (mb_strlen($old['name']) < 2 || mb_strlen($old['name']) > 120) {
+            self::athletesView($old, 'Informe o nome (2 a 120 caracteres).', 422);
+        }
+        if (strlen($old['email']) > 190 || !filter_var($old['email'], FILTER_VALIDATE_EMAIL)) {
+            self::athletesView($old, 'Informe um e-mail válido.', 422);
+        }
+        if (($err = Auth::passwordError($temp)) !== null) {
+            self::athletesView($old, 'Senha provisória: ' . $err, 422);
+        }
+        if (($old['trainer_id'] === '') !== ($old['modality'] === '')) {
+            self::athletesView($old, 'Para já vincular, escolha a modalidade e o treinador (ou deixe os dois em branco).', 422);
+        }
+        try {
+            $id = Auth::createUser($old['name'], $old['email'], $temp, 'athlete', false);
+        } catch (\PDOException $e) {
+            if ($e->getCode() !== '23000') {
+                throw $e;
+            }
+            self::athletesView($old, 'Já existe uma conta com este e-mail.', 422);
+        }
+        Db::run('UPDATE users SET must_change_password = 1 WHERE id = ?', [$id]);
+        Audit::log('athlete_created', (int) $me['id'], 'user', $id);
+
+        $msg = 'Atleta cadastrado. Informe o e-mail e a senha provisória: no primeiro acesso ele cria a própria senha e aceita os termos.';
+        $type = 'ok';
+        if ($old['trainer_id'] !== '') {
+            $r = Assignment::assign((int) $old['trainer_id'], $id, $old['modality'], '', (int) $me['id']);
+            if ($r['result'] === Assignment::OK) {
+                $msg .= ' Treinador vinculado.';
+            } else {
+                $type = 'err';
+                $msg = 'Atleta cadastrado, mas o treinador NÃO foi vinculado ('
+                    . ($r['result'] === Assignment::BLOCKED ? 'está no limite de atletas; atribua abaixo informando o motivo da exceção'
+                        : ($r['result'] === Assignment::NOT_ATTENDED ? 'não atende essa modalidade' : 'seleção inválida')) . ').';
+            }
+        }
+        Http::flash($type, $msg);
+        Http::redirect('/admin/atletas/' . $id);
+    }
+
+    /** @param array<string,string> $old */
+    private static function athletesView(array $old, ?string $error, int $status): never
+    {
         $q = trim((string) (is_string($_GET['q'] ?? null) ? $_GET['q'] : ''));
         $orphan = ($_GET['sem_treinador'] ?? '') === '1';
         $page = max(1, (int) ($_GET['pagina'] ?? 1));
@@ -90,13 +151,15 @@ final class Admin
             $params
         );
         View::render('admin/athletes', ['title' => 'Atletas', 'shell' => 'admin', 'active' => 'atletas', 'rows' => $rows,
-            'q' => $q, 'orphan' => $orphan, 'page' => $page, 'pages' => max(1, (int) ceil($total / self::PER_PAGE)), 'total' => $total]);
+            'old' => $old, 'error' => $error, 'modalities' => self::MODALITIES,
+            'trainers' => array_values(array_filter(self::trainerRows(), static fn ($t) => $t['status'] === 'active' && $t['modalities'])),
+            'q' => $q, 'orphan' => $orphan, 'page' => $page, 'pages' => max(1, (int) ceil($total / self::PER_PAGE)), 'total' => $total], $status);
     }
 
     /** @return array<string,mixed> usuário com o perfil pedido, ou 404 */
     private static function userWithRole(int $id, string $role): array
     {
-        $u = Db::one('SELECT u.id, u.name, u.email, u.status, u.created_at, u.last_login_at FROM ' . self::withRole($role) . ' WHERE u.id = ?', [$id]);
+        $u = Db::one('SELECT u.id, u.name, u.email, u.status, u.created_at, u.last_login_at, u.must_change_password FROM ' . self::withRole($role) . ' WHERE u.id = ?', [$id]);
         if (!$u) {
             App::notFound();
         }
@@ -130,7 +193,9 @@ final class Admin
         $trainerId = (int) Http::input('trainer_id');
         $mod = Http::input('modality');
         $r = Assignment::assign($trainerId, $athleteId, $mod, Http::input('reason'), (int) $me['id']);
-        if ($r['result'] === Assignment::INVALID) {
+        if ($r['result'] === Assignment::NOT_ATTENDED) {
+            Http::flash('err', 'Este treinador não atende essa modalidade. Marque a modalidade na página dele ou escolha outro treinador.');
+        } elseif ($r['result'] === Assignment::INVALID) {
             Http::flash('err', 'Escolha um treinador ativo e uma modalidade.');
         } elseif ($r['result'] === Assignment::BLOCKED) {
             $c = Capacity::status($trainerId);
@@ -160,11 +225,27 @@ final class Admin
         self::trainersView(['name' => '', 'email' => ''], null, 200);
     }
 
+    /** @return list<string> */
+    private static function postedModalities(): array
+    {
+        $raw = $_POST['modalities'] ?? [];
+        return array_values(array_intersect(array_keys(self::MODALITIES), is_array($raw) ? array_filter($raw, 'is_string') : []));
+    }
+
+    public static function setModalities(int $id): never
+    {
+        $me = self::admin();
+        self::userWithRole($id, 'trainer');
+        $err = Assignment::setModalities($id, self::postedModalities(), (int) $me['id']);
+        Http::flash($err === null ? 'ok' : 'err', $err ?? 'Modalidades do treinador atualizadas.');
+        Http::redirect('/admin/treinadores/' . $id);
+    }
+
     /** @param array<string,string> $old */
     private static function trainersView(array $old, ?string $error, int $status): never
     {
         View::render('admin/trainers', ['title' => 'Treinadores', 'shell' => 'admin', 'active' => 'treinadores',
-            'rows' => self::trainerRows(), 'old' => $old, 'error' => $error], $status);
+            'rows' => self::trainerRows(), 'old' => $old, 'error' => $error, 'modalities' => self::MODALITIES, 'checked' => self::postedModalities()], $status);
     }
 
     /** Cria o treinador sem senha definida e gera um link (48 h, uso único) para ele criar a própria senha. */
@@ -181,6 +262,7 @@ final class Admin
             self::trainersView($old, 'Informe um e-mail válido.', 422);
         }
         $temp = (string) ($_POST['temp_password'] ?? '');
+        $mods = self::postedModalities();
         if ($temp !== '' && ($err = Auth::passwordError($temp)) !== null) {
             self::trainersView($old, 'Senha provisória: ' . $err, 422);
         }
@@ -196,6 +278,7 @@ final class Admin
             Db::run('UPDATE users SET must_change_password = 1 WHERE id = ?', [$id]);
         }
         Audit::log('trainer_created', (int) $me['id'], 'user', $id, ['temporary_password' => $temp !== '']);
+        Assignment::setModalities($id, $mods, (int) $me['id']);
         if ($temp !== '') {
             Http::flash('ok', 'Treinador criado com a senha provisória. Informe a ele o e-mail e a senha; no primeiro acesso ele terá de criar a própria.');
             Http::redirect('/admin/treinadores/' . $id);
@@ -211,6 +294,7 @@ final class Admin
         $trainer = self::userWithRole($id, 'trainer');
         View::render('admin/trainer', [
             'title' => $trainer['name'], 'shell' => 'admin', 'active' => 'treinadores', 'person' => $trainer,
+            'modalities' => self::MODALITIES, 'attends' => Assignment::modalities($id),
             'capacity' => Capacity::status($id),
             'presencial' => Db::one('SELECT presencial_limit FROM trainer_settings WHERE trainer_id = ?', [$id])['presencial_limit'] ?? null,
             'athletes' => Db::all(
@@ -330,6 +414,7 @@ final class Admin
             }
             Db::run('DELETE FROM trainer_availability WHERE trainer_id = ?', [$id]);
             Db::run('DELETE FROM trainer_settings WHERE trainer_id = ?', [$id]);
+            Db::run('DELETE FROM trainer_modalities WHERE trainer_id = ?', [$id]);
             Db::run('DELETE FROM users WHERE id = ?', [$id]);
             $pdo->commit();
         } catch (\PDOException $e) {
@@ -345,6 +430,7 @@ final class Admin
                 Db::run('DELETE FROM user_roles WHERE user_id = ?', [$id]);
                 Db::run('DELETE FROM password_resets WHERE user_id = ?', [$id]);
                 Db::run('DELETE FROM trainer_availability WHERE trainer_id = ?', [$id]);
+                Db::run('DELETE FROM trainer_modalities WHERE trainer_id = ?', [$id]);
                 Db::run(
                     "UPDATE users SET status = 'blocked', deleted_at = NOW(), session_version = session_version + 1, must_change_password = 0,
                        name = ?, email = ?, password_hash = ? WHERE id = ?",

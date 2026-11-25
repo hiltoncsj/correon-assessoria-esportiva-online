@@ -13,4 +13,5 @@
 		</form>
 	<?php endif; ?>
 	<p class="links"><a href="/entrar">Voltar para entrar</a></p>
+	<p class="links"><a href="<?= e(\Correon\View::site()) ?>">← Voltar para o site</a></p>
 </section>

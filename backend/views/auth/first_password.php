@@ -11,6 +11,12 @@
 		<label class="field">Repita a nova senha
 			<input type="password" name="password2" autocomplete="new-password" required>
 		</label>
+		<?php if (!empty($needsTerms)): ?>
+			<label class="check">
+				<input type="checkbox" name="accept" value="1" required>
+				<span>Li e aceito os <a href="/termos" target="_blank" rel="noopener">Termos de Uso</a> e a <a href="/privacidade" target="_blank" rel="noopener">Política de Privacidade</a>.</span>
+			</label>
+		<?php endif; ?>
 		<button class="btn" type="submit">Salvar e continuar</button>
 	</form>
 </section>

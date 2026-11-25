@@ -20,7 +20,7 @@ if (!str_ends_with((string) Correon\Env::get('DB_NAME'), '_test')) {
 $php = PHP_BINARY;
 $pdo = Db::pdo();
 $pdo->exec('SET FOREIGN_KEY_CHECKS=0');
-foreach (['workout_template_items', 'workout_template_sessions', 'workout_templates', 'athlete_hr_zones', 'athlete_hr_settings', 'contents', 'media', 'notifications', 'pt_sessions', 'pt_packages', 'contract_events', 'charges', 'contracts', 'plan_prices', 'trainer_settings', 'capacity_exceptions', 'trainer_availability', 'workout_log_revisions', 'workout_logs', 'workout_versions', 'workout_items', 'workouts', 'trainer_athletes', 'modalities', 'athlete_profiles', 'audit_log', 'consents', 'password_resets', 'rate_events', 'user_roles', 'users', 'schema_migrations'] as $t) {
+foreach (['workout_template_items', 'workout_template_sessions', 'workout_templates', 'athlete_hr_zones', 'athlete_hr_settings', 'trainer_modalities', 'contents', 'media', 'notifications', 'pt_sessions', 'pt_packages', 'contract_events', 'charges', 'contracts', 'plan_prices', 'trainer_settings', 'capacity_exceptions', 'trainer_availability', 'workout_log_revisions', 'workout_logs', 'workout_versions', 'workout_items', 'workouts', 'trainer_athletes', 'modalities', 'athlete_profiles', 'audit_log', 'consents', 'password_resets', 'rate_events', 'user_roles', 'users', 'schema_migrations'] as $t) {
     $pdo->exec("DROP TABLE IF EXISTS $t"); // somente no banco de teste
 }
 $pdo->exec('DROP TABLE IF EXISTS roles');
@@ -314,6 +314,12 @@ check('redefinição por e-mail também desconecta sessões abertas', $s === 303
 
 echo "Sprint 3 — treinos\n";
 $cli = static function (string $script, array $args) use ($php): int {
+    if ($script === 'assign-trainer.php' && ($args[0] ?? '') === 'assign') {
+        // cenário: o treinador atende a modalidade do vínculo
+        Db::run("INSERT IGNORE INTO trainer_modalities (trainer_id, modality_id)
+                 SELECT u.id, m.id FROM users u JOIN user_roles ur ON ur.user_id = u.id JOIN roles r ON r.id = ur.role_id AND r.slug = 'trainer'
+                 JOIN modalities m ON m.slug = ? WHERE u.email = ?", [$args[3], $args[1]]);
+    }
     exec(escapeshellarg($php) . ' ' . escapeshellarg(__DIR__ . "/../bin/$script") . ' ' . implode(' ', array_map('escapeshellarg', $args)), $o, $c);
     return $c;
 };
@@ -1500,6 +1506,92 @@ check('administrador não pode ser excluído (404)', $s === 404);
 [$s] = $del($adm, $uid('maria@example.com'), '/admin');
 check('atleta não é excluído por esta ação (404)', $s === 404);
 check('exclusão auditada', (int) Db::one("SELECT COUNT(*) c FROM audit_log WHERE action = 'trainer_deleted'")['c'] === 2);
+
+echo "Modalidades do treinador\n";
+Db::run('DELETE FROM rate_events');
+$adm = new Client(); $adm->post('/entrar', ['email' => 'adm@example.com', 'password' => 'senha-staff-12345']);
+$adm->post('/admin/treinadores', ['name' => 'Coach Modal', 'email' => 'modal@example.com', 'temp_password' => 'provisoria-2026', 'modalities' => ['corrida', 'triathlon', 'xyz']], '/admin/treinadores');
+$mid = $uid('modal@example.com');
+check('cadastro grava as modalidades marcadas (ignora valor inválido)', Correon\Assignment::modalities($mid) === ['corrida', 'triathlon']);
+[$s, $b] = $adm->req('GET', '/admin/treinadores');
+check('lista mostra as modalidades', str_contains($b, 'Corrida, Triathlon'));
+$novo = new Client(); register($novo, ['email' => 'nina@example.com', 'name' => 'Nina Nova']);
+$nina = $uid('nina@example.com');
+$page = "/admin/atletas/$nina";
+[$s, $b] = $adm->req('GET', $page);
+check('atribuição oferece o treinador com as modalidades dele', str_contains($b, 'data-mods="corrida triathlon"'));
+$links = static fn () => (int) Db::one("SELECT COUNT(*) c FROM trainer_athletes WHERE trainer_id = ? AND status = 'active'", [$mid])['c'];
+$adm->post("$page/vinculos", ['trainer_id' => (string) $mid, 'modality' => 'musculacao'], $page);
+[$s, $b] = $adm->req('GET', $page);
+check('modalidade que o treinador não atende é recusada', $links() === 0 && str_contains($b, 'não atende essa modalidade'));
+$adm->post("$page/vinculos", ['trainer_id' => (string) $mid, 'modality' => 'triathlon'], $page);
+check('modalidade atendida é aceita', $links() === 1);
+$mp = "/admin/treinadores/$mid";
+$adm->post("$mp/modalidades", ['modalities' => ['corrida']], $mp);
+check('não retira modalidade com atleta ativo', Correon\Assignment::modalities($mid) === ['corrida', 'triathlon']);
+$adm->post("$mp/modalidades", ['modalities' => ['corrida', 'triathlon', 'musculacao']], $mp);
+check('acrescenta modalidade', Correon\Assignment::modalities($mid) === ['corrida', 'triathlon', 'musculacao']);
+[$s] = $tr1->post("$mp/modalidades", ['modalities' => ['corrida']], '/treinador');
+check('treinador não altera as próprias modalidades (403)', $s === 403 && count(Correon\Assignment::modalities($mid)) === 3);
+$cm = new Client(); Db::run('DELETE FROM rate_events');
+$cm->post('/entrar', ['email' => 'modal@example.com', 'password' => 'provisoria-2026']);
+$cm->post('/trocar-senha', ['password' => 'senha-do-modal-1', 'password2' => 'senha-do-modal-1']);
+[$s] = $cm->req('GET', '/treinador/modelos/novo?modalidade=musculacao');
+check('cria modelo em modalidade que atende, mesmo sem atleta nela', $s === 200);
+$adm->post("$mp/modalidades", ['modalities' => ['triathlon']], $mp);
+[$s] = $cm->req('GET', '/treinador/modelos/novo?modalidade=musculacao');
+check('retirada a modalidade (sem atletas), o modelo dela deixa de ser oferecido', Correon\Assignment::modalities($mid) === ['triathlon'] && $s === 404);
+$adm->post('/admin/treinadores', ['name' => 'Coach Vazio', 'email' => 'vazio@example.com', 'temp_password' => 'provisoria-2026'], '/admin/treinadores');
+$vid = $uid('vazio@example.com');
+[$s, $b] = $adm->req('GET', "/admin/treinadores/$vid");
+check('sem modalidade: aviso na página', str_contains($b, 'Sem modalidade definida'));
+$adm->post("$page/vinculos", ['trainer_id' => (string) $vid, 'modality' => 'corrida'], $page);
+check('sem modalidade não recebe atletas', (int) Db::one('SELECT COUNT(*) c FROM trainer_athletes WHERE trainer_id = ?', [$vid])['c'] === 0);
+$adm->post("/admin/usuarios/$vid/excluir", [], "/admin/treinadores/$vid");
+check('treinador com modalidades continua podendo ser excluído sem histórico', !Db::one('SELECT id FROM users WHERE id = ?', [$vid]));
+
+echo "Cadastro de atleta pelo admin\n";
+Db::run('DELETE FROM rate_events');
+$adm = new Client(); $adm->post('/entrar', ['email' => 'adm@example.com', 'password' => 'senha-staff-12345']);
+$coach = (int) Db::one("SELECT trainer_id t FROM trainer_modalities tm JOIN modalities m ON m.id = tm.modality_id JOIN users u ON u.id = tm.trainer_id AND u.status = 'active' AND u.deleted_at IS NULL WHERE m.slug = 'corrida' LIMIT 1")['t'];
+$mkA = static fn (array $o) => $adm->post('/admin/atletas', $o + ['name' => 'Aluno Antigo', 'email' => 'antigo@example.com', 'temp_password' => 'provisoria-aluno', 'modality' => '', 'trainer_id' => ''], '/admin/atletas');
+$none = static fn () => Db::one("SELECT id FROM users WHERE email = 'antigo@example.com'") === null;
+foreach (['sem senha' => ['temp_password' => ''], 'senha curta' => ['temp_password' => '123'], 'e-mail inválido' => ['email' => 'x'], 'só modalidade, sem treinador' => ['modality' => 'corrida']] as $label => $over) {
+    [$s] = $mkA($over);
+    check("cadastro de atleta recusado: $label (422)", $s === 422 && ($label === 'e-mail inválido' || $none()), "status=$s");
+}
+[$s] = $tr1->post('/admin/atletas', ['name' => 'X', 'email' => 'y@example.com', 'temp_password' => 'provisoria-aluno'], '/treinador');
+check('treinador não cadastra atleta (403)', $s === 403);
+[$s] = $mkA(['modality' => 'corrida', 'trainer_id' => (string) $coach]);
+$aid = $uid('antigo@example.com');
+check('atleta criado já vinculado ao treinador', $s === 303 && (int) Db::one("SELECT COUNT(*) c FROM trainer_athletes WHERE athlete_id = ? AND status = 'active'", [$aid])['c'] === 1);
+check('criado com troca obrigatória, sem aceite feito pelo admin', (int) Db::one('SELECT must_change_password m FROM users WHERE id = ?', [$aid])['m'] === 1 && (int) Db::one('SELECT COUNT(*) c FROM consents WHERE user_id = ?', [$aid])['c'] === 0);
+[$s] = $mkA([]);
+check('e-mail repetido = 422', $s === 422);
+$al = new Client(); Db::run('DELETE FROM rate_events');
+[$s] = $al->post('/entrar', ['email' => 'antigo@example.com', 'password' => 'provisoria-aluno']);
+check('primeiro acesso leva à troca de senha', $s === 303 && $al->header('Location') === '/trocar-senha');
+[$s, $b] = $al->req('GET', '/trocar-senha');
+check('a tela pede o aceite dos Termos', str_contains($b, 'name="accept"'));
+[$s] = $al->req('GET', '/app');
+check('sem trocar/aceitar, a área é bloqueada', $s === 303 && $al->header('Location') === '/trocar-senha');
+[$s] = $al->post('/trocar-senha', ['password' => 'senha-do-aluno-1', 'password2' => 'senha-do-aluno-1']);
+check('sem aceitar os Termos não continua (422)', $s === 422 && (int) Db::one('SELECT COUNT(*) c FROM consents WHERE user_id = ?', [$aid])['c'] === 0);
+[$s] = $al->post('/trocar-senha', ['password' => 'senha-do-aluno-1', 'password2' => 'senha-do-aluno-1', 'accept' => '1']);
+check('aceita, define a senha e entra', $s === 303 && $al->header('Location') === '/app' && (int) Db::one('SELECT COUNT(*) c FROM consents WHERE user_id = ?', [$aid])['c'] === 2);
+$adm->post('/admin/atletas', ['name' => 'Aluno Link', 'email' => 'link@example.com', 'temp_password' => 'provisoria-aluno'], '/admin/atletas');
+$lid = $uid('link@example.com');
+array_map('unlink', glob(BASE_PATH . '/storage/mail/*.txt') ?: []);
+Db::run('DELETE FROM rate_events');
+$g = new Client(); $g->post('/recuperar-senha', ['email' => 'link@example.com']);
+preg_match('#/redefinir-senha/([0-9a-f]{64})#', (string) file_get_contents((glob(BASE_PATH . '/storage/mail/*.txt') ?: [''])[0]), $mt);
+$g->post("/redefinir-senha/{$mt[1]}", ['password' => 'senha-por-link-1', 'password2' => 'senha-por-link-1'], "/redefinir-senha/{$mt[1]}");
+Db::run('DELETE FROM rate_events');
+$g2 = new Client();
+[$s] = $g2->post('/entrar', ['email' => 'link@example.com', 'password' => 'senha-por-link-1']);
+check('recuperar a senha por e-mail não pula o aceite dos Termos', $s === 303 && $g2->header('Location') === '/trocar-senha');
+[$s, $b] = $adm->req('GET', "/admin/atletas/$lid");
+check('admin vê que o primeiro acesso está pendente', str_contains($b, 'aguardando (senha provisória)'));
 
 echo "\nResultado: $pass ok, $fail falha(s)\n";
 exit($fail ? 1 : 0);

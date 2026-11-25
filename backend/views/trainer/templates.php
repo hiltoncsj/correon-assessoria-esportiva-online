@@ -6,7 +6,7 @@ $modNames = ['corrida' => 'Corrida', 'triathlon' => 'Triathlon', 'musculacao' =>
 <p class="muted">Cada modelo (Treino 1, Treino 2…) reúne as <strong>sessões</strong> de um nível de atleta (o dia de cada sessão é escolhido ao enviar). Defina o treino padrão de cada atleta na página dele e depois aplique a semana em “Aplicar modelos”. Cada atleta recebe uma cópia que você pode editar individualmente.</p>
 
 <?php if (!$mods): ?>
-	<div class="tile"><p class="muted">Você ainda não tem atletas vinculados, então ainda não há modalidade para criar modelos.</p></div>
+	<div class="tile"><p class="muted">A administração ainda não definiu as modalidades que você atende.</p></div>
 <?php else: ?>
 	<p class="actions">
 		<?php foreach ($mods as $m): ?>

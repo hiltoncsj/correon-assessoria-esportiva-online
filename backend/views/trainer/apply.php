@@ -15,7 +15,7 @@ $modNames = ['corrida' => 'Corrida', 'triathlon' => 'Triathlon', 'musculacao' =>
 
 <?php $fmt = static fn (string $d) => date('d/m', strtotime($d)); ?>
 <?php if (!$mods): ?>
-	<div class="tile"><p class="muted">Você ainda não tem atletas vinculados.</p></div>
+	<div class="tile"><p class="muted">A administração ainda não definiu as modalidades que você atende.</p></div>
 <?php elseif (!$templates): ?>
 	<div class="tile">
 		<p class="muted">Você ainda não tem modelos de <?= e($modNames[$mod] ?? $mod) ?> com pelo menos uma sessão.</p>

@@ -28,4 +28,5 @@
 		<button class="btn" type="submit">Criar conta</button>
 	</form>
 	<p class="links">Já tem conta? <a href="/entrar">Entrar</a></p>
+	<p class="links"><a href="<?= e(\Correon\View::site()) ?>">← Voltar para o site</a></p>
 </section>
