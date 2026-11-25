@@ -11,6 +11,7 @@ $items = [
 	'comunicados' => ['/admin/comunicados', 'Comunicados'],
 	'relatorios' => ['/admin/relatorios', 'Relatórios'],
 	'auditoria' => ['/admin/auditoria', 'Auditoria'],
+	'senha' => ['/admin/senha', 'Alterar senha'],
 ];
 ?>
 <div class="shell">

@@ -1593,5 +1593,32 @@ check('recuperar a senha por e-mail não pula o aceite dos Termos', $s === 303 &
 [$s, $b] = $adm->req('GET', "/admin/atletas/$lid");
 check('admin vê que o primeiro acesso está pendente', str_contains($b, 'aguardando (senha provisória)'));
 
+echo "Alterar senha: admin e treinador\n";
+foreach (['admin' => '/admin', 'trainer' => '/treinador'] as $role => $base) {
+    Db::run('DELETE FROM rate_events');
+    $email = "troca-$role@example.com";
+    putenv('CORREON_NEW_PASSWORD=senha-inicial-123');
+    exec(escapeshellarg($php) . ' ' . escapeshellarg(__DIR__ . '/../bin/create-user.php') . " $role " . escapeshellarg("Troca $role") . " $email", $o, $c);
+    $a = new Client(); $a->post('/entrar', ['email' => $email, 'password' => 'senha-inicial-123']);
+    $other = new Client(); $other->post('/entrar', ['email' => $email, 'password' => 'senha-inicial-123']);
+    [$s, $b] = $a->req('GET', "$base");
+    check("$role: o menu tem Alterar senha", str_contains($b, "$base/senha"));
+    [$s, $b] = $a->req('GET', "$base/senha");
+    check("$role: tela de troca = 200, sem pedir a senha atual", $s === 200 && !str_contains($b, 'name="current"'));
+    [$s] = $a->post("$base/senha", ['password' => 'curta', 'password2' => 'curta']);
+    check("$role: senha fraca = 422", $s === 422);
+    [$s] = $a->post("$base/senha", ['password' => 'senha-nova-456789', 'password2' => 'senha-nova-456789']);
+    check("$role: troca a senha", $s === 303 && $a->header('Location') === "$base/senha");
+    [$s] = $a->req('GET', $base);
+    [$s2] = $other->req('GET', $base);
+    check("$role: sessão atual continua; a outra é desconectada", $s === 200 && $s2 === 303);
+    Db::run('DELETE FROM rate_events');
+    [$s] = (new Client())->post('/entrar', ['email' => $email, 'password' => 'senha-inicial-123']);
+    check("$role: senha antiga deixa de valer", $s === 401);
+}
+[$s] = $mar->req('GET', '/admin/senha');
+[$s2] = $mar->req('GET', '/treinador/senha');
+check('atleta não abre as telas de senha do admin e do treinador (403)', $s === 403 && $s2 === 403);
+
 echo "\nResultado: $pass ok, $fail falha(s)\n";
 exit($fail ? 1 : 0);

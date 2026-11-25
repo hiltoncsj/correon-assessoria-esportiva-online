@@ -12,6 +12,7 @@ $items = [
 	'personal' => ['/treinador/personal', 'Personal' . ($ptPending ? " ($ptPending)" : '')],
 	'disponibilidade' => ['/treinador/disponibilidade', 'Disponibilidade'],
 	'novidades' => ['/treinador/novidades', 'Novidades' . ($unseen ? " ($unseen)" : '')],
+	'senha' => ['/treinador/senha', 'Alterar senha'],
 ];
 ?>
 <div class="shell">

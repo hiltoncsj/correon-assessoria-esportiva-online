@@ -1,7 +1,7 @@
-<?php /** @var ?string $error */ ?>
-<p class="eyebrow">Atleta</p>
+<?php /** @var string $label @var string $action @var ?string $error */ ?>
+<p class="eyebrow"><?= e($label) ?></p>
 <h1>Alterar senha</h1>
-<form class="tile form form--narrow" method="post" action="/app/senha" novalidate>
+<form class="tile form form--narrow" method="post" action="<?= e($action) ?>" novalidate>
 	<input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
 	<?php if (!empty($error)): ?><p class="notice notice--err" role="alert"><?= e($error) ?></p><?php endif; ?>
 	<label class="field">Nova senha (mínimo 10 caracteres)

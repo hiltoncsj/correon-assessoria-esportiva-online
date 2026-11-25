@@ -299,48 +299,6 @@ final class Athlete
         Http::redirect('/app/perfil');
     }
 
-    public static function passwordForm(): never
-    {
-        $u = App::require('athlete');
-        View::render('athlete/password', ['title' => 'Alterar senha', 'shell' => 'athlete', 'active' => 'senha', 'u' => $u, 'error' => null]);
-    }
-
-    public static function passwordSave(): never
-    {
-        $u = App::require('athlete');
-        $id = (int) $u['id'];
-        $render = static fn (string $err, int $status) => View::render('athlete/password', [
-            'title' => 'Alterar senha', 'shell' => 'athlete', 'active' => 'senha', 'u' => $u, 'error' => $err,
-        ], $status);
-
-        if (RateLimiter::tooMany('pwchange', (string) $id, 5, 900)) {
-            $render('Muitas tentativas. Aguarde alguns minutos.', 429);
-        }
-        // Decisão do cliente: usuário já logado troca a senha sem digitar a atual.
-        // Compensações: limite de trocas, desconexão das outras sessões, auditoria e aviso por e-mail.
-        $new = (string) ($_POST['password'] ?? '');
-        $row = Db::one('SELECT password_hash FROM users WHERE id = ?', [$id]);
-        $err = Auth::passwordError($new) ?? ($new !== (string) ($_POST['password2'] ?? '') ? 'As senhas não conferem.' : null);
-        if ($err === null && $row && password_verify($new, $row['password_hash'])) {
-            $err = 'A nova senha deve ser diferente da atual.';
-        }
-        if ($err !== null) {
-            $render($err, 422);
-        }
-        RateLimiter::hit('pwchange', (string) $id);
-        Db::run('UPDATE users SET password_hash = ?, session_version = session_version + 1 WHERE id = ?', [password_hash($new, PASSWORD_DEFAULT), $id]);
-        Auth::login($id); // nova sessão com a versão atual; as outras sessões deixam de valer
-        Audit::log('password_changed', $id, 'user', $id);
-        Mailer::send((string) $u['email'], 'CorreON — sua senha foi alterada',
-            "Olá, {$u['name']}.
-
-A senha da sua conta CorreON foi alterada em " . date('d/m/Y H:i') . ".
-"
-            . "Se não foi você, recupere o acesso em " . rtrim((string) Env::get('APP_URL', ''), '/') . "/recuperar-senha e avise a CorreON.");
-        Http::flash('ok', 'Senha alterada. Os outros dispositivos foram desconectados.');
-        Http::redirect('/app/senha');
-    }
-
     // ---- auxiliares ----
 
     /** @return array<string,string> */
