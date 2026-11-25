@@ -108,3 +108,13 @@ Substitui, no ajuste 2, o "dia fixo por sessão" e o envio direto pela tela de a
 
 Aplicado na Hero 6 (`src/data/plans.ts`). **Premissas a confirmar:** (1) valores valem para cada modalidade; (2) R$ 180 substitui os R$ 150 para novos alunos; (3) o combo de R$ 200 continua só no mensal — trimestral/semestral/anual combinados mostram a soma dos individuais; (4) juros do parcelamento não definidos (a página não afirma "sem juros"). Continuam em aberto: preço do combo nos demais períodos, aluno antigo (R$ 120/mês), se as parcelas são no cartão (total garantido) ou cobrança recorrente, preços do Personal Trainer, gateway, prazo de inadimplência e cancelamento.
 - Informado pelo cliente: hoje há **13 alunos antigos, em 4 cidades** (condição legada a registrar na Sprint 6; ainda não definido como serão cadastrados nem se a cidade afeta preço ou atendimento).
+
+## 2026-11-25 — Sprint 6: preços, contratos e pagamentos (baixa manual)
+- **Preços** em `plan_prices` (centavos), editáveis em `/admin/precos`; combo só com preço no mensal. A página pública continua lendo `src/data/plans.ts`: mudar preço no admin NÃO muda o site (unificar por API na Sprint 8).
+- **Contrato** guarda o valor aplicado, parcelas, condição e vigência; mudança de tabela não afeta contratos. Condições: tabela; **aluno antigo** (R$ 120, mensal de UMA modalidade); **valor negociado** (justificativa obrigatória) para casos não definidos. Só o admin cria contratos.
+- Não sobrepõe contratos da mesma modalidade; Corrida e Triathlon nunca juntos; troca Corrida↔Triathlon mantém o valor (ação do admin, registrada).
+- **Parcelas** mensais a partir do 1º vencimento (centavos restantes na última). **Pagamento** separado do contrato: baixa manual (data e forma), idempotente; estorno com motivo. Nada é apagado (`contract_events` + auditoria).
+- **Renovação** manual, mantendo produto, período, VALOR e condição. **Premissa:** aluno novo também renova pelo valor anterior, mesmo que a tabela tenha mudado (confirmar).
+- **Cancelamento:** motivo obrigatório; parcelas abertas canceladas; sem multa.
+- **Não implementado (regras/decisões pendentes):** gateway, cobrança recorrente e webhooks (tabela já tem `external_id` único para idempotência); contratação on-line pelo aluno; suspensão por inadimplência; multa/prazo mínimo; preços de Personal.
+- Nenhum dado de cartão é armazenado.

@@ -2,6 +2,24 @@
 <p class="eyebrow"><a href="/admin/atletas">← Atletas</a></p>
 <h1><?= e($person['name']) ?></h1>
 
+<section class="tile" aria-labelledby="h-ctr">
+	<h2 id="h-ctr">Contratos</h2>
+	<?php if (!$contracts): ?><p class="muted">Nenhum contrato registrado.</p><?php else: ?>
+		<ul class="done-list">
+			<?php foreach ($contracts as $k): ?>
+				<li>
+					<a href="/admin/contratos/<?= (int) $k['id'] ?>">#<?= (int) $k['id'] ?></a>
+					<?= e(\Correon\Billing::PRODUCTS[$k['product']] ?? $k['product']) ?> · <?= e(\Correon\Billing::PERIODS[$k['period']]) ?> · <?= e(\Correon\Billing::money($k['price_cents'])) ?>
+					<span class="badge"><?= e(\Correon\Billing::label($k)) ?></span>
+					<?php if ($k['price_condition'] === 'legacy_120'): ?><span class="badge badge--draft">Aluno antigo</span><?php endif; ?>
+					<?php if ((int) $k['overdue']): ?><span class="badge badge--off">Em atraso</span><?php endif; ?>
+				</li>
+			<?php endforeach; ?>
+		</ul>
+	<?php endif; ?>
+	<p><a class="btn btn--sm" href="/admin/atletas/<?= (int) $person['id'] ?>/contrato">Novo contrato</a></p>
+</section>
+
 <section class="tile" aria-labelledby="h-vinc">
 	<h2 id="h-vinc">Treinadores</h2>
 	<?php if (!$links): ?><p class="muted">Nenhum treinador atribuído.</p><?php else: ?>

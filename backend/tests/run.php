@@ -20,7 +20,7 @@ if (!str_ends_with((string) Correon\Env::get('DB_NAME'), '_test')) {
 $php = PHP_BINARY;
 $pdo = Db::pdo();
 $pdo->exec('SET FOREIGN_KEY_CHECKS=0');
-foreach (['workout_template_items', 'workout_template_sessions', 'workout_templates', 'athlete_hr_zones', 'athlete_hr_settings', 'trainer_settings', 'capacity_exceptions', 'trainer_availability', 'workout_log_revisions', 'workout_logs', 'workout_versions', 'workout_items', 'workouts', 'trainer_athletes', 'modalities', 'athlete_profiles', 'audit_log', 'consents', 'password_resets', 'rate_events', 'user_roles', 'users', 'schema_migrations'] as $t) {
+foreach (['workout_template_items', 'workout_template_sessions', 'workout_templates', 'athlete_hr_zones', 'athlete_hr_settings', 'contract_events', 'charges', 'contracts', 'plan_prices', 'trainer_settings', 'capacity_exceptions', 'trainer_availability', 'workout_log_revisions', 'workout_logs', 'workout_versions', 'workout_items', 'workouts', 'trainer_athletes', 'modalities', 'athlete_profiles', 'audit_log', 'consents', 'password_resets', 'rate_events', 'user_roles', 'users', 'schema_migrations'] as $t) {
     $pdo->exec("DROP TABLE IF EXISTS $t"); // somente no banco de teste
 }
 $pdo->exec('DROP TABLE IF EXISTS roles');
@@ -1004,6 +1004,133 @@ check('auditoria filtra por dia', str_contains($b, '0 registro(s)'));
 [$s] = $adm->req('GET', '/admin/auditoria?pagina=999&dia=xx&acao=' . urlencode("' OR 1=1"));
 check('filtros inválidos não quebram', $s === 200);
 check('auditoria nunca guarda senhas ou links', Db::one("SELECT id FROM audit_log WHERE details LIKE '%senha-do-coach%' OR details LIKE '%redefinir-senha%'") === null);
+
+echo "Sprint 6 — preços, contratos e pagamentos\n";
+Db::run('DELETE FROM rate_events');
+$adm = new Client(); $adm->post('/entrar', ['email' => 'adm@example.com', 'password' => 'senha-staff-12345']);
+foreach (['/admin/precos', '/admin/contratos', '/admin/financeiro', "/admin/atletas/$mariaId/contrato"] as $path) {
+    [$s] = $adm->req('GET', $path);
+    [$s2] = $tr1->req('GET', $path);
+    [$s3] = $mar->req('GET', $path);
+    check(preg_replace('/\d+/', '{id}', $path) . ': admin 200; treinador e atleta 403', $s === 200 && $s2 === 403 && $s3 === 403, "$s $s2 $s3");
+}
+$B = Correon\Billing::class;
+check('valores em centavos e leitura em formato brasileiro', $B::parseMoney('1.440,00') === 144000 && $B::parseMoney('180') === 18000 && $B::parseMoney('180,5') === 18050 && $B::parseMoney('abc') === null && $B::parseMoney('-5') === null && $B::parseMoney('0') === null);
+check('parcelas somam o total (centavos na última)', $B::split(10000, 3) === [3333, 3333, 3334]);
+check('soma de meses respeita o fim do mês', $B::addMonths('2026-01-31', 1) === '2026-02-28' && $B::endDate('2026-03-01', 'trimestral') === '2026-05-31');
+$p = $B::priceTable();
+check('tabela inicial: preços informados e combo só no mensal', $p['corrida']['mensal']['total'] === 18000 && $p['triathlon']['anual']['total'] === 144000 && $p['musculacao']['semestral']['max'] === 6
+    && $p['corrida+musculacao']['mensal']['total'] === 20000 && $p['corrida+musculacao']['anual']['total'] === null);
+
+echo "Contratos\n";
+$eva = $uid('eva@example.com');
+$today = date('Y-m-d');
+$ct = static fn (array $o = []) => $o + ['product' => 'corrida', 'period' => 'mensal', 'condition' => 'standard', 'value' => '', 'reason' => '', 'installments' => '1', 'starts_on' => date('Y-m-d'), 'first_due' => ''];
+$count = static fn () => (int) Db::one('SELECT COUNT(*) c FROM contracts')['c'];
+$new = static function (int $athlete, array $data) use ($adm): array {
+    [$s] = $adm->post("/admin/atletas/$athlete/contrato", $data, "/admin/atletas/$athlete/contrato");
+    return [$s, (int) preg_replace('#.*/#', '', (string) $adm->header('Location'))];
+};
+foreach ([
+    'sem produto' => ['product' => ''], 'combo sem preço no anual' => ['product' => 'corrida+musculacao', 'period' => 'anual'],
+    'parcelas demais' => ['installments' => '2'], 'data inválida' => ['starts_on' => '2026-02-30'],
+    'valor negociado sem justificativa' => ['condition' => 'custom', 'value' => '100'], 'valor negociado inválido' => ['condition' => 'custom', 'value' => 'abc', 'reason' => 'teste ok'],
+    'aluno antigo em combo' => ['condition' => 'legacy_120', 'product' => 'corrida+musculacao'], 'aluno antigo no anual' => ['condition' => 'legacy_120', 'period' => 'anual'],
+] as $label => $over) {
+    [$s] = $new($eva, $ct($over));
+    check("contrato recusado: $label (422)", $s === 422 && $count() === 0, "status=$s");
+}
+[$s] = $mar->post("/admin/atletas/$mariaId/contrato", $ct(['condition' => 'legacy_120']), '/app');
+check('atleta NÃO se atribui a condição antiga (403)', $s === 403 && $count() === 0);
+[$s, $cid] = $new($eva, $ct(['product' => 'corrida', 'period' => 'anual', 'installments' => '12', 'price_cents' => '1', 'value' => '1,00']));
+$c = Db::one('SELECT * FROM contracts WHERE id = ?', [$cid]);
+check('contrato anual de tabela: R$ 1.440 em 12x (ignora preço vindo do formulário)', $s === 303 && (int) $c['price_cents'] === 144000 && (int) Db::one('SELECT COUNT(*) c FROM charges WHERE contract_id = ?', [$cid])['c'] === 12);
+check('12 parcelas de R$ 120 com vencimentos mensais', (int) Db::one('SELECT SUM(amount_cents) s FROM charges WHERE contract_id = ?', [$cid])['s'] === 144000
+    && Db::one('SELECT due_on d FROM charges WHERE contract_id = ? AND seq = 2', [$cid])['d'] === $B::addMonths($today, 1));
+[$s] = $new($eva, $ct(['product' => 'corrida']));
+check('não duplica modalidade no mesmo período', $s === 422 && $count() === 1);
+[$s] = $new($eva, $ct(['product' => 'triathlon']));
+check('Corrida e Triathlon não se combinam', $s === 422 && $count() === 1);
+[$s, $mus] = $new($eva, $ct(['product' => 'musculacao']));
+check('modalidade independente com período próprio é aceita', $s === 303 && $count() === 2);
+
+$joaoC = $uid('joao@example.com');
+[$s, $leg] = $new($joaoC, $ct(['product' => 'corrida', 'condition' => 'legacy_120', 'starts_on' => date('Y-m-d', strtotime('-40 days'))]));
+check('aluno antigo: R$ 120 gravado no contrato', $s === 303 && (int) Db::one('SELECT price_cents p FROM contracts WHERE id = ?', [$leg])['p'] === 12000);
+check('quem aplicou a condição antiga fica registrado', Db::one("SELECT id FROM audit_log WHERE action = 'contract_created' AND entity_id = ? AND details LIKE '%legacy_120%'", [$leg]) !== null);
+[$s, $neg] = $new($mariaId, $ct(['product' => 'musculacao', 'period' => 'trimestral', 'condition' => 'custom', 'value' => '400,00', 'reason' => 'Acordo <b>antigo</b>', 'installments' => '3']));
+check('valor negociado com justificativa (3 parcelas)', $s === 303 && (int) Db::one('SELECT SUM(amount_cents) s FROM charges WHERE contract_id = ?', [$neg])['s'] === 40000);
+[, $b] = $adm->req('GET', "/admin/contratos/$neg");
+check('justificativa escapada', str_contains($b, 'Acordo &lt;b&gt;') && !str_contains($b, '<b>antigo</b>'));
+
+echo "Mudança de preço não altera contratos\n";
+$post = ['price' => [], 'max' => []];
+foreach ($B::priceTable() as $prod => $periods) { foreach ($periods as $per => $row) { $post['price'][$prod][$per] = $row['total'] === null ? '' : number_format($row['total'] / 100, 2, ',', '.'); $post['max'][$prod][$per] = (string) $row['max']; } }
+$bad = $post; $bad['price']['corrida']['mensal'] = 'xx';
+$adm->post('/admin/precos', $bad, '/admin/precos');
+check('preço inválido: nada é salvo', $B::priceTable()['corrida']['mensal']['total'] === 18000);
+$post['price']['corrida']['anual'] = '1.500,00';
+$adm->post('/admin/precos', $post, '/admin/precos');
+check('admin altera o preço de tabela', $B::priceTable()['corrida']['anual']['total'] === 150000);
+check('contrato existente mantém o valor aplicado', (int) Db::one('SELECT price_cents p FROM contracts WHERE id = ?', [$cid])['p'] === 144000);
+check('mudança de preço auditada com antes e depois', Db::one("SELECT id FROM audit_log WHERE action = 'price_changed' AND details LIKE '%144000%' AND details LIKE '%150000%'") !== null);
+
+echo "Pagamentos\n";
+$ch1 = (int) Db::one('SELECT id FROM charges WHERE contract_id = ? AND seq = 1', [$cid])['id'];
+$page = "/admin/contratos/$cid";
+$status = static fn (int $id) => Db::one('SELECT status s FROM charges WHERE id = ?', [$id])['s'];
+$adm->post("/admin/cobrancas/$ch1/pagar", ['paid_on' => date('Y-m-d', strtotime('+1 day')), 'method' => 'pix'], $page);
+check('data futura não é aceita', $status($ch1) === 'open');
+$adm->post("/admin/cobrancas/$ch1/pagar", ['paid_on' => $today, 'method' => 'cheque'], $page);
+check('forma de pagamento inválida não é aceita', $status($ch1) === 'open');
+[$s] = $mar->post("/admin/cobrancas/$ch1/pagar", ['paid_on' => $today, 'method' => 'pix'], '/app');
+check('atleta não dá baixa (403)', $s === 403 && $status($ch1) === 'open');
+$adm->post("/admin/cobrancas/$ch1/pagar", ['paid_on' => $today, 'method' => 'pix'], $page);
+check('baixa manual registrada', $status($ch1) === 'paid');
+$events = static fn () => (int) Db::one("SELECT COUNT(*) c FROM contract_events WHERE charge_id = ? AND event = 'paid'", [$ch1])['c'];
+$adm->post("/admin/cobrancas/$ch1/pagar", ['paid_on' => $today, 'method' => 'pix'], $page);
+check('repetir a baixa não duplica (idempotente)', $events() === 1);
+$adm->post("/admin/cobrancas/$ch1/estornar", ['reason' => ''], $page);
+check('estorno exige motivo', $status($ch1) === 'paid');
+$adm->post("/admin/cobrancas/$ch1/estornar", ['reason' => 'lançado errado'], $page);
+check('estorno reabre a parcela e fica no histórico', $status($ch1) === 'open' && Db::one("SELECT id FROM contract_events WHERE charge_id = ? AND event = 'reversed'", [$ch1]) !== null);
+$adm->post("/admin/cobrancas/$ch1/pagar", ['paid_on' => $today, 'method' => 'pix'], $page);
+
+echo "Atraso, renovação, troca e cancelamento\n";
+[$s, $b] = $adm->req('GET', '/admin/financeiro');
+check('financeiro mostra recebido e atraso reais', str_contains($b, 'R$ 120,00') && (int) Db::one("SELECT COUNT(*) c FROM charges WHERE status = 'open' AND due_on < CURDATE()")['c'] >= 1);
+[$s, $b] = $adm->req('GET', '/admin/contratos?filtro=atrasados');
+check('filtro de atrasados mostra o contrato vencido', str_contains($b, "/admin/contratos/$leg") && !str_contains($b, "/admin/contratos/$neg\""));
+$adm->post("/admin/contratos/$leg/renovar", [], "/admin/contratos/$leg");
+$ren = Db::one('SELECT * FROM contracts WHERE renewed_from = ?', [$leg]);
+check('renovar mantém R$ 120 e a condição antiga', $ren && (int) $ren['price_cents'] === 12000 && $ren['price_condition'] === 'legacy_120' && $ren['starts_on'] === date('Y-m-d', strtotime(Db::one('SELECT ends_on e FROM contracts WHERE id = ?', [$leg])['e'] . ' +1 day')));
+$before = $count();
+$adm->post("/admin/contratos/$leg/renovar", [], "/admin/contratos/$leg");
+check('não renova duas vezes', $count() === $before);
+$adm->post("/admin/contratos/$cid/trocar", [], $page);
+$sw = Db::one('SELECT product, price_cents FROM contracts WHERE id = ?', [$cid]);
+check('troca Corrida → Triathlon mantém o valor', $sw['product'] === 'triathlon' && (int) $sw['price_cents'] === 144000);
+$adm->post("/admin/contratos/$mus/trocar", [], "/admin/contratos/$mus");
+check('musculação não tem troca', Db::one('SELECT product p FROM contracts WHERE id = ?', [$mus])['p'] === 'musculacao');
+$adm->post("$page/cancelar", ['reason' => ''], $page);
+check('cancelamento exige motivo', Db::one('SELECT status s FROM contracts WHERE id = ?', [$cid])['s'] === 'active');
+$adm->post("$page/cancelar", ['reason' => 'Mudança de cidade'], $page);
+check('cancelar: parcelas abertas canceladas, a paga permanece', Db::one('SELECT status s FROM contracts WHERE id = ?', [$cid])['s'] === 'cancelled' && $status($ch1) === 'paid'
+    && (int) Db::one("SELECT COUNT(*) c FROM charges WHERE contract_id = ? AND status = 'cancelled'", [$cid])['c'] === 11);
+check('nada é apagado', (int) Db::one('SELECT COUNT(*) c FROM charges WHERE contract_id = ?', [$cid])['c'] === 12);
+
+echo "Visão do atleta\n";
+$jo = new Client(); Db::run('DELETE FROM rate_events'); $jo->post('/entrar', ['email' => 'joao@example.com', 'password' => 'senha-forte-123']);
+[$s, $b] = $jo->req('GET', '/app/assinaturas');
+check('atleta vê o próprio contrato e parcelas', $s === 200 && str_contains($b, 'R$ 120,00') && str_contains($b, 'Em atraso'));
+check('atleta não vê dados de outros atletas', !str_contains($b, 'R$ 400,00') && !str_contains($b, 'R$ 1.440,00'));
+check('rótulo interno "aluno antigo" não é exposto ao atleta', !str_contains($b, 'Aluno antigo'));
+[$s, $b] = $jo->req('GET', '/app/modalidades');
+check('modalidades vêm do contrato vigente', $s === 200 && str_contains($b, 'Corrida'));
+[$s, $b] = $jo->req('GET', '/app');
+check('painel do atleta mostra assinatura e atraso reais', str_contains($b, 'parcela(s) em atraso'));
+[$s] = $jo->req('GET', "/admin/contratos/$neg");
+check('atleta não abre contrato pelo endereço do admin (403)', $s === 403);
 
 echo "\nResultado: $pass ok, $fail falha(s)\n";
 exit($fail ? 1 : 0);

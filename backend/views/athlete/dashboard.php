@@ -47,12 +47,24 @@ $fmt = static fn (?string $d, string $f) => $d ? date($f, strtotime($d)) : '—'
 
 	<section class="tile" aria-labelledby="t-mod">
 		<h2 id="t-mod">Modalidades ativas</h2>
-		<p class="muted">Você ainda não tem modalidades ativas. A contratação pela plataforma será liberada em breve.</p>
+		<?php if (!$modalities): ?>
+			<p class="muted">Você não tem modalidades com contrato vigente.</p>
+		<?php else: ?>
+			<ul class="plain-list"><?php foreach ($modalities as $m): ?><li><?= e($m) ?></li><?php endforeach; ?></ul>
+		<?php endif; ?>
 	</section>
 
 	<section class="tile" aria-labelledby="t-ass">
 		<h2 id="t-ass">Assinatura</h2>
-		<p class="muted">Nenhuma assinatura ativa.</p>
+		<?php $current = array_values(array_filter($contracts, static fn ($c) => in_array(\Correon\Billing::label($c), ['Vigente', 'A iniciar'], true)));
+		$late = array_sum(array_column($contracts, 'overdue')); ?>
+		<?php if (!$current && !$late): ?>
+			<p class="muted">Nenhuma assinatura ativa.</p>
+		<?php else: ?>
+			<?php foreach ($current as $c): ?><p><?= e(\Correon\Billing::PRODUCTS[$c['product']] ?? $c['product']) ?> · <?= e(\Correon\Billing::PERIODS[$c['period']]) ?> até <?= e(date('d/m/Y', strtotime($c['ends_on']))) ?></p><?php endforeach; ?>
+			<?php if ($late): ?><p><span class="badge badge--off"><?= (int) $late ?> parcela(s) em atraso</span></p><?php endif; ?>
+		<?php endif; ?>
+		<p><a class="btn btn--sm" href="/app/assinaturas">Ver pagamentos</a></p>
 	</section>
 
 	<section class="tile" aria-labelledby="t-conta">

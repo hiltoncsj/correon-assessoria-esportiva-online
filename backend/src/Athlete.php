@@ -7,11 +7,6 @@ final class Athlete
 {
     private const STATES = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'];
 
-    /** Seções futuras: título, descrição do que vai aparecer e sprint prevista. */
-    public const SOON = [
-        'modalidades' => ['Minhas modalidades', 'Aqui aparecerão as modalidades contratadas (Corrida, Triathlon, Musculação) e a periodicidade de cada uma.'],
-        'assinaturas' => ['Assinaturas e pagamentos', 'Aqui aparecerão seus contratos, a situação de cada assinatura e o histórico de pagamentos.'],
-    ];
 
     public static function dashboard(): never
     {
@@ -33,11 +28,11 @@ final class Athlete
                (SELECT COUNT(*) FROM workout_logs WHERE athlete_id = ? AND outcome IN ('completed','partial')) AS done",
             [$id, $id]
         ) ?? ['upcoming' => 0, 'done' => 0];
-        // Modalidades ativas e assinatura dependem de contratos (Sprint 6): seguem em estado vazio.
         View::render('athlete/dashboard', [
             'title' => 'Minha área', 'shell' => 'athlete', 'active' => 'home',
             'u' => $u, 'meta' => $meta, 'completeness' => self::completeness($profile),
             'next' => $next, 'stats' => $stats, 'trainers' => self::trainerLinks($id),
+            'modalities' => self::activeModalities($id), 'contracts' => Billing::ofAthlete($id),
         ]);
     }
 
@@ -185,11 +180,34 @@ final class Athlete
         Http::redirect('/app/treinos/' . $id);
     }
 
-    public static function soon(string $section): never
+    public static function billing(): never
     {
-        App::require('athlete');
-        [$title, $text] = self::SOON[$section];
-        View::render('athlete/soon', ['title' => $title, 'shell' => 'athlete', 'active' => $section, 'text' => $text]);
+        $u = App::require('athlete');
+        $contracts = Billing::ofAthlete((int) $u['id']); // somente o próprio usuário da sessão
+        $charges = [];
+        foreach (Db::all('SELECT c.* FROM charges c JOIN contracts k ON k.id = c.contract_id WHERE k.athlete_id = ? ORDER BY c.seq', [$u['id']]) as $ch) {
+            $charges[(int) $ch['contract_id']][] = $ch;
+        }
+        View::render('athlete/billing', ['title' => 'Assinaturas', 'shell' => 'athlete', 'active' => 'assinaturas', 'contracts' => $contracts, 'charges' => $charges]);
+    }
+
+    /** @return list<string> modalidades cobertas por contratos vigentes */
+    private static function activeModalities(int $athleteId): array
+    {
+        $out = [];
+        foreach (Db::all("SELECT product FROM contracts WHERE athlete_id = ? AND status = 'active' AND starts_on <= CURDATE() AND ends_on >= CURDATE()", [$athleteId]) as $r) {
+            foreach (Billing::modalitiesOf($r['product']) as $m) {
+                $out[$m] = Billing::PRODUCTS[$m];
+            }
+        }
+        return array_values($out);
+    }
+
+    public static function modalities(): never
+    {
+        $u = App::require('athlete');
+        View::render('athlete/modalities', ['title' => 'Minhas modalidades', 'shell' => 'athlete', 'active' => 'modalidades',
+            'modalities' => self::activeModalities((int) $u['id'])]);
     }
 
     public static function profileForm(): never

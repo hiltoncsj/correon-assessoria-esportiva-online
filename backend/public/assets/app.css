@@ -283,3 +283,6 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { box-shadow: 
 .notice { overflow-wrap: anywhere; }
 
 .shell__main > .tile + .grid, .shell__main > .tbl-wrap + .grid, .shell__main > .grid + h2 { margin-top: var(--space-lg); }
+
+.tbl .form--inline { margin: 0; gap: var(--space-xs); flex-wrap: wrap; }
+.tbl .form--inline .select { min-width: 8rem; }

@@ -110,7 +110,7 @@ final class Admin
         Audit::log('athlete_profile_viewed', (int) $me['id'], 'user', $id);
         View::render('admin/athlete', [
             'title' => $athlete['name'], 'shell' => 'admin', 'active' => 'atletas', 'person' => $athlete,
-            'profile' => Athlete::profile($id), 'modalities' => self::MODALITIES,
+            'profile' => Athlete::profile($id), 'modalities' => self::MODALITIES, 'contracts' => Billing::ofAthlete($id),
             'links' => Db::all(
                 'SELECT ta.trainer_id, t.name AS trainer, m.slug, m.name AS modality, ta.status, ta.started_at, ta.ended_at
                  FROM trainer_athletes ta JOIN users t ON t.id = ta.trainer_id JOIN modalities m ON m.id = ta.modality_id

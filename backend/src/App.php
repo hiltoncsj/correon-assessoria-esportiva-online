@@ -37,8 +37,8 @@ final class App
             'POST /sair' => 'logout',
             'GET /app' => 'Athlete@dashboard', 'GET /app/perfil' => 'Athlete@profileForm', 'POST /app/perfil' => 'Athlete@profileSave',
             'GET /app/senha' => 'Athlete@passwordForm', 'POST /app/senha' => 'Athlete@passwordSave',
-            'GET /app/modalidades' => 'soon:modalidades', 'GET /app/treinos' => 'Athlete@workouts',
-            'GET /app/treinador' => 'Athlete@trainers', 'GET /app/assinaturas' => 'soon:assinaturas',
+            'GET /app/modalidades' => 'Athlete@modalities', 'GET /app/treinos' => 'Athlete@workouts',
+            'GET /app/treinador' => 'Athlete@trainers', 'GET /app/assinaturas' => 'Athlete@billing',
             'GET /treinador' => 'TrainerPanel@home', 'GET /treinador/atletas' => 'TrainerPanel@athletes',
             'GET /treinador/acompanhamento' => 'TrainerPanel@followUp', 'GET /treinador/agenda' => 'TrainerPanel@agenda',
             'GET /treinador/disponibilidade' => 'TrainerPanel@availability', 'POST /treinador/disponibilidade' => 'TrainerPanel@availabilityAdd',
@@ -46,7 +46,8 @@ final class App
             'POST /treinador/modelos/novo' => 'Templates@create', 'GET /treinador/modelos/aplicar' => 'Templates@applyForm', 'POST /treinador/modelos/montar' => 'Templates@plan', 'POST /treinador/modelos/excluir' => 'Templates@removeWeek',
             'GET /treinador/zonas' => 'Trainer@zonesAll', 'POST /treinador/zonas' => 'Trainer@zonesAllSave', 'POST /treinador/modelos/aplicar' => 'Templates@applySave',
             'GET /treinador/treinos/novo' => 'Trainer@newForm', 'POST /treinador/treinos/novo' => 'Trainer@create',
-            'GET /admin' => 'Admin@home', 'GET /admin/atletas' => 'Admin@athletes', 'GET /admin/treinadores' => 'Admin@trainers',
+            'GET /admin' => 'Admin@home', 'GET /admin/precos' => 'Finance@prices', 'POST /admin/precos' => 'Finance@savePrices',
+            'GET /admin/contratos' => 'Finance@contracts', 'GET /admin/financeiro' => 'Finance@overview', 'GET /admin/atletas' => 'Admin@athletes', 'GET /admin/treinadores' => 'Admin@trainers',
             'POST /admin/treinadores' => 'Admin@createTrainer', 'GET /admin/relatorios' => 'Admin@reports', 'GET /admin/auditoria' => 'Admin@audit',
             'GET /termos' => 'terms', 'GET /privacidade' => 'privacy',
         ];
@@ -59,6 +60,14 @@ final class App
             ['GET', '#^/app/treinos/(\d+)$#', 'Athlete@workout'],
             ['POST', '#^/app/treinos/(\d+)/registro$#', 'Athlete@logSave'],
             ['POST', '#^/treinador/disponibilidade/(\d+)/remover$#', 'TrainerPanel@availabilityRemove'],
+            ['GET', '#^/admin/atletas/(\d+)/contrato$#', 'Finance@newContract'],
+            ['POST', '#^/admin/atletas/(\d+)/contrato$#', 'Finance@createContract'],
+            ['GET', '#^/admin/contratos/(\d+)$#', 'Finance@contract'],
+            ['POST', '#^/admin/contratos/(\d+)/cancelar$#', 'Finance@cancel'],
+            ['POST', '#^/admin/contratos/(\d+)/renovar$#', 'Finance@renew'],
+            ['POST', '#^/admin/contratos/(\d+)/trocar$#', 'Finance@swap'],
+            ['POST', '#^/admin/cobrancas/(\d+)/pagar$#', 'Finance@pay'],
+            ['POST', '#^/admin/cobrancas/(\d+)/estornar$#', 'Finance@reverse'],
             ['GET', '#^/admin/atletas/(\d+)$#', 'Admin@athlete'],
             ['POST', '#^/admin/atletas/(\d+)/vinculos$#', 'Admin@assign'],
             ['POST', '#^/admin/atletas/(\d+)/vinculos/encerrar$#', 'Admin@unassign'],
@@ -83,9 +92,6 @@ final class App
         $h = $routes["$method $path"] ?? null;
         if ($h === null) {
             self::notFound();
-        }
-        if (str_starts_with($h, 'soon:')) {
-            Athlete::soon(substr($h, 5));
         }
         if (str_contains($h, '@')) {
             [$cls, $fn] = explode('@', $h);
