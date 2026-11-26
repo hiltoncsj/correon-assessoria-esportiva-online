@@ -9,7 +9,8 @@ const indicators = [
 	{ value: '04', label: 'CIDADES' },
 	{ value: '02', label: 'TREINADORES' },
 	{ value: '13', label: 'ATLETAS' },
-	{ value: '49', label: 'OBJETIVOS' },
+	// 49 é o piso: o total do cadastro (/api/v1/public/indicadores) só substitui quando for maior.
+	{ value: '49', label: 'OBJETIVOS', stat: 'objetivos' },
 ];
 ---
 
@@ -25,12 +26,25 @@ const indicators = [
 			{indicators.map((item) => (
 				<div class="stats__item">
 					<dt class="stats__label">{item.label}</dt>
-					<dd class="stats__value">{item.value}</dd>
+					<dd class="stats__value" data-stat={item.stat}>{item.value}</dd>
 				</div>
 			))}
 		</dl>
 	</div>
 </section>
+
+<script>
+	const goals = document.querySelector<HTMLElement>('[data-stat="objetivos"]');
+	if (goals) {
+		fetch('/api/v1/public/indicadores', { headers: { Accept: 'application/json' } })
+			.then((r) => (r.ok ? r.json() : Promise.reject()))
+			.then((data: { objetivos?: number }) => {
+				const total = Number(data.objetivos);
+				if (Number.isInteger(total) && total > Number(goals.textContent)) goals.textContent = String(total);
+			})
+			.catch(() => {});
+	}
+</script>
 
 <style>
 	.stats {

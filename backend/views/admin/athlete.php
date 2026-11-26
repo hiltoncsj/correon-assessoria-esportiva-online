@@ -73,6 +73,12 @@
 	<?php endif; ?>
 </section>
 
+<section class="tile" aria-labelledby="h-obj">
+	<h2 id="h-obj">Objetivos e provas</h2>
+	<?php $items = array_merge($goals['next'], $goals['past']); $base = null; ?>
+	<?php if (!$items): ?><p class="muted">Nenhum registro.</p><?php else: require BASE_PATH . '/views/goals/items.php'; endif; ?>
+</section>
+
 <div class="grid">
 	<section class="tile" aria-labelledby="h-perfil">
 		<h2 id="h-perfil">Perfil</h2>

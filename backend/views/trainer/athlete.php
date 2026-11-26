@@ -4,6 +4,7 @@ $badge = ['draft' => 'badge--draft', 'published' => 'badge--ok', 'cancelled' => 
 ?>
 <p class="eyebrow"><a href="/treinador/atletas">← Meus atletas</a></p>
 <h1><?= e($athlete['name']) ?></h1>
+<p class="actions"><a class="btn btn--sm btn--ghost" href="/treinador/atletas/<?= (int) $athlete['id'] ?>/objetivos">Objetivos e provas</a></p>
 
 <div class="grid">
 	<section class="tile" aria-labelledby="h-perfil">

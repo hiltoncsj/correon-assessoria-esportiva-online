@@ -7,6 +7,7 @@ $items = [
 	'modelos' => ['/treinador/modelos', 'Modelos de treino'],
 	'aplicar' => ['/treinador/modelos/aplicar', 'Aplicar modelos'],
 	'zonas' => ['/treinador/zonas', 'Zonas de FC'],
+	'objetivos' => ['/treinador/objetivos', 'Objetivos e provas'],
 	'acompanhamento' => ['/treinador/acompanhamento', 'Acompanhamento'],
 	'agenda' => ['/treinador/agenda', 'Agenda'],
 	'personal' => ['/treinador/personal', 'Personal' . ($ptPending ? " ($ptPending)" : '')],

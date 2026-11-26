@@ -7,6 +7,7 @@ $items = [
 	'modalidades' => ['/app/modalidades', 'Minhas modalidades'],
 	'treinos' => ['/app/treinos', 'Meus treinos'],
 	'treinador' => ['/app/treinador', 'Meu treinador'],
+	'objetivos' => ['/app/objetivos', 'Objetivos e provas'],
 	'personal' => ['/app/personal', 'Personal Trainer'],
 	'assinaturas' => ['/app/assinaturas', 'Assinaturas'],
 	'privacidade' => ['/app/privacidade', 'Privacidade'],

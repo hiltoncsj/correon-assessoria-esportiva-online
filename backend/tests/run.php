@@ -20,7 +20,7 @@ if (!str_ends_with((string) Correon\Env::get('DB_NAME'), '_test')) {
 $php = PHP_BINARY;
 $pdo = Db::pdo();
 $pdo->exec('SET FOREIGN_KEY_CHECKS=0');
-foreach (['workout_template_items', 'workout_template_sessions', 'workout_templates', 'athlete_hr_zones', 'athlete_hr_settings', 'trainer_modalities', 'contents', 'media', 'notifications', 'pt_sessions', 'pt_packages', 'contract_events', 'charges', 'contracts', 'plan_prices', 'trainer_settings', 'capacity_exceptions', 'trainer_availability', 'workout_log_revisions', 'workout_logs', 'workout_versions', 'workout_items', 'workouts', 'trainer_athletes', 'modalities', 'athlete_profiles', 'audit_log', 'consents', 'password_resets', 'rate_events', 'user_roles', 'users', 'schema_migrations'] as $t) {
+foreach (['workout_template_items', 'workout_template_sessions', 'workout_templates', 'athlete_hr_zones', 'athlete_hr_settings', 'athlete_goals', 'trainer_modalities', 'contents', 'media', 'notifications', 'pt_sessions', 'pt_packages', 'contract_events', 'charges', 'contracts', 'plan_prices', 'trainer_settings', 'capacity_exceptions', 'trainer_availability', 'workout_log_revisions', 'workout_logs', 'workout_versions', 'workout_items', 'workouts', 'trainer_athletes', 'modalities', 'athlete_profiles', 'audit_log', 'consents', 'password_resets', 'rate_events', 'user_roles', 'users', 'schema_migrations'] as $t) {
     $pdo->exec("DROP TABLE IF EXISTS $t"); // somente no banco de teste
 }
 $pdo->exec('DROP TABLE IF EXISTS roles');
@@ -1619,6 +1619,62 @@ foreach (['admin' => '/admin', 'trainer' => '/treinador'] as $role => $base) {
 [$s] = $mar->req('GET', '/admin/senha');
 [$s2] = $mar->req('GET', '/treinador/senha');
 check('atleta não abre as telas de senha do admin e do treinador (403)', $s === 403 && $s2 === 403);
+
+echo "Objetivos e provas\n";
+Db::run('DELETE FROM rate_events');
+$adm = new Client(); $adm->post('/entrar', ['email' => 'adm@example.com', 'password' => 'senha-staff-12345']);
+foreach (['gol-a', 'gol-b'] as $n) {
+    $adm->post('/admin/treinadores', ['name' => "Coach $n", 'email' => "$n@example.com", 'temp_password' => 'provisoria-2026', 'modalities' => ['musculacao']], '/admin/treinadores');
+}
+$login = static function (string $email, string $pass): Client { Db::run('DELETE FROM rate_events'); $c = new Client(); $c->post('/entrar', ['email' => $email, 'password' => $pass]); return $c; };
+foreach (['gol-a', 'gol-b'] as $n) {
+    $login("$n@example.com", 'provisoria-2026')->post('/trocar-senha', ['password' => 'senha-do-coach-1', 'password2' => 'senha-do-coach-1']);
+}
+$ga = $login('gol-a@example.com', 'senha-do-coach-1');
+$gb = $login('gol-b@example.com', 'senha-do-coach-1');
+$g1 = new Client(); register($g1, ['email' => 'gil@example.com', 'name' => 'Gil Meta']);
+$g2 = new Client(); register($g2, ['email' => 'gina@example.com', 'name' => 'Gina Meta']);
+$gil = $uid('gil@example.com');
+$goal = static fn (array $o = []) => $o + ['kind' => 'prova', 'sport' => 'natacao', 'name' => 'Travessia Teste', 'target_date' => date('Y-m-d', strtotime('+30 days')), 'distance' => '1,5 km', 'city' => '', 'target' => '', 'status' => 'planned', 'result' => ''];
+$count = static fn () => (int) Db::one('SELECT COUNT(*) c FROM athlete_goals')['c'];
+$public = static function (): array { [$s, $b] = (new Client())->req('GET', '/api/v1/public/indicadores'); return [$s, json_decode($b, true), $b]; };
+foreach (['prova sem data' => ['target_date' => ''], 'data inexistente' => ['target_date' => '2027-02-30'], 'sem nome' => ['name' => ''], 'esporte inválido' => ['sport' => 'xadrez']] as $label => $over) {
+    [$s] = $g1->post('/app/objetivos', $goal($over), '/app/objetivos');
+    check("objetivo recusado: $label (422)", $s === 422 && $count() === 0, "status=$s");
+}
+[$s] = $g1->post('/app/objetivos', $goal(), '/app/objetivos');
+$id = (int) (Db::one('SELECT id FROM athlete_goals WHERE athlete_id = ?', [$gil])['id'] ?? 0);
+check('atleta cadastra uma prova', $s === 303 && $id > 0);
+[$s] = $g1->post('/app/objetivos', $goal(['kind' => 'objetivo', 'sport' => 'corrida', 'name' => 'Correr <b>5 km</b>', 'target_date' => '']), '/app/objetivos');
+[$s2, $b] = $g1->req('GET', '/app/objetivos');
+check('objetivo sem data é aceito e o texto é escapado', $s === 303 && str_contains($b, 'Correr &lt;b&gt;5 km') && !str_contains($b, 'Correr <b>'));
+check('atleta sem treinador não conta no total do site', $public()[1] === ['objetivos' => 0]);
+[$s] = $g2->req('GET', "/app/objetivos/$id");
+[$s2] = $g2->post("/app/objetivos/$id", $goal(['name' => 'invadido']), '/app/objetivos');
+check('outro atleta não vê nem altera (404)', $s === 404 && $s2 === 404);
+[$s] = $ga->req('GET', "/treinador/atletas/$gil/objetivos");
+[$s2] = $ga->req('GET', "/treinador/objetivos/$id");
+check('treinador sem vínculo recebe 404', $s === 404 && $s2 === 404);
+$adm->post("/admin/atletas/$gil/vinculos", ['trainer_id' => (string) $uid('gol-a@example.com'), 'modality' => 'musculacao'], "/admin/atletas/$gil");
+[$s, $b] = $ga->req('GET', '/treinador/objetivos');
+check('com vínculo (qualquer modalidade) vê a prova de natação', $s === 200 && str_contains($b, 'Travessia Teste') && str_contains($b, 'Gil Meta'));
+[$s] = $ga->post("/treinador/atletas/$gil/objetivos", $goal(['sport' => 'triathlon', 'name' => 'Tri do Treinador']), "/treinador/atletas/$gil/objetivos");
+[$s2, $b] = $g1->req('GET', '/app/objetivos');
+check('treinador cadastra e o atleta vê', $s === 303 && str_contains($b, 'Tri do Treinador'));
+[$s] = $ga->post("/treinador/objetivos/$id", $goal(['status' => 'done', 'result' => '32:10']), "/treinador/objetivos/$id");
+check('treinador registra o resultado', $s === 303 && Db::one('SELECT result FROM athlete_goals WHERE id = ?', [$id])['result'] === '32:10');
+[$s] = $gb->req('GET', "/treinador/objetivos/$id");
+[$s2] = $gb->post("/treinador/atletas/$gil/objetivos", $goal(), '/treinador');
+check('outro treinador continua sem acesso (404)', $s === 404 && $s2 === 404 && $count() === 3);
+[$s, $json, $raw] = $public();
+check('site recebe só o total', $s === 200 && $json === ['objetivos' => 3] && !str_contains($raw, 'Gil'));
+$g1->post("/app/objetivos/$id", $goal(['status' => 'cancelled']), "/app/objetivos/$id");
+check('cancelado sai do total, mas fica no histórico', $public()[1] === ['objetivos' => 2] && $count() === 3);
+[$s, $b] = $adm->req('GET', "/admin/atletas/$gil");
+check('admin consulta, sem link de edição', str_contains($b, 'Tri do Treinador') && !str_contains($b, "/app/objetivos/$id") && !str_contains($b, "/treinador/objetivos/$id"));
+$adm->post("/admin/atletas/$gil/vinculos/encerrar", ['trainer_id' => (string) $uid('gol-a@example.com'), 'modality' => 'musculacao'], "/admin/atletas/$gil");
+[$s] = $ga->req('GET', "/treinador/objetivos/$id");
+check('encerrado o vínculo, o treinador perde o acesso', $s === 404);
 
 echo "\nResultado: $pass ok, $fail falha(s)\n";
 exit($fail ? 1 : 0);

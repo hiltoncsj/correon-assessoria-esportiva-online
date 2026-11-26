@@ -154,3 +154,8 @@ Aplicado na Hero 6 (`src/data/plans.ts`). **Premissas a confirmar:** (1) valores
 - **Cabeçalho do site:** o botão "COMEÇAR" (ia para `#contato`) passou a ser **"ENTRAR"** e leva à área restrita: `/entrar` em produção, `http://localhost:8080/entrar` no computador local.
 - **Alterar senha para todos os perfis:** atleta (`/app/senha`), treinador (`/treinador/senha`) e admin (`/admin/senha`) usam a mesma tela e as mesmas regras (`Account`): sem pedir a senha atual (decisão do cliente), limite de tentativas, desconexão das outras sessões, auditoria e aviso por e-mail.
 - Observação: o teste de tempo de resposta do login (enumeração de e-mails) pode oscilar com a máquina carregada; falhou uma vez e passou na repetição, sem mudança no login.
+
+## 2026-11-26 — Objetivos e provas
+- Tabela `athlete_goals` (prova ou objetivo; corrida, triathlon, natação, ciclismo, trail, outro). Nada é apagado: usa-se "Cancelado".
+- Atleta cadastra e edita os próprios; treinador com vínculo ativo em **qualquer modalidade** vê, cadastra e edita os dos seus atletas (escolha padrão proposta ao cliente; pode ser restringida por modalidade). Admin só consulta. Sem vínculo: 404. O treinador não cadastra provas próprias.
+- **Hero 2 ligada ao cadastro:** `GET /api/v1/public/indicadores` devolve só o total. Contam os registros não cancelados de atletas ativos **com treinador vinculado** (cadastro avulso não infla o número). O site mostra **o maior** entre 49 (valor aprovado) e o total do sistema, para não cair a zero nem somar em dobro enquanto os objetivos antigos não forem lançados. Sem JavaScript ou sem API: 49.

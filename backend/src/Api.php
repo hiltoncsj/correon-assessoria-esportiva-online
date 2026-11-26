@@ -16,6 +16,12 @@ final class Api
                 echo json_encode(Content::publicData(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG);
                 exit;
             }
+            if ($method === 'GET' && $path === '/api/v1/public/indicadores') {
+                header('Content-Type: application/json; charset=utf-8');
+                header('Cache-Control: public, max-age=300');
+                echo json_encode(['objetivos' => Goals::publicCount()]);
+                exit;
+            }
             if ($method === 'GET' && preg_match('#^/api/v1/public/imagem/(\d+)$#', $path, $m) && Content::imageIsPublic((int) $m[1])) {
                 Media::output((int) $m[1], true);
             }
