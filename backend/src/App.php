@@ -41,7 +41,7 @@ final class App
             'GET /recuperar-senha' => 'forgotForm', 'POST /recuperar-senha' => 'forgot',
             'POST /sair' => 'logout',
             'GET /app' => 'Athlete@dashboard', 'GET /app/perfil' => 'Athlete@profileForm', 'POST /app/perfil' => 'Athlete@profileSave',
-            'GET /app/objetivos' => 'Goals@athleteList', 'POST /app/objetivos' => 'Goals@athleteCreate', 'GET /treinador/objetivos' => 'Goals@trainerUpcoming',
+            'GET /app/objetivos' => 'Goals@athleteList', 'GET /treinador/objetivos' => 'Goals@trainerList', 'POST /treinador/objetivos' => 'Goals@create',
             'GET /app/senha' => 'Account@form', 'POST /app/senha' => 'Account@save',
             'GET /treinador/senha' => 'Account@form', 'POST /treinador/senha' => 'Account@save',
             'GET /admin/senha' => 'Account@form', 'POST /admin/senha' => 'Account@save',
@@ -68,12 +68,13 @@ final class App
         }
         // Rotas com id numérico: [método, padrão, Classe@método]
         foreach ([
-            ['GET', '#^/app/objetivos/(\d+)$#', 'Goals@athleteEdit'],
-            ['POST', '#^/app/objetivos/(\d+)$#', 'Goals@athleteUpdate'],
-            ['GET', '#^/treinador/atletas/(\d+)/objetivos$#', 'Goals@trainerList'],
-            ['POST', '#^/treinador/atletas/(\d+)/objetivos$#', 'Goals@trainerCreate'],
-            ['GET', '#^/treinador/objetivos/(\d+)$#', 'Goals@trainerEdit'],
-            ['POST', '#^/treinador/objetivos/(\d+)$#', 'Goals@trainerUpdate'],
+            ['POST', '#^/app/objetivos/(\d+)/entrar$#', 'Goals@join'],
+            ['POST', '#^/app/objetivos/(\d+)/sair$#', 'Goals@leave'],
+            ['POST', '#^/app/objetivos/(\d+)/meu$#', 'Goals@mine'],
+            ['GET', '#^/treinador/atletas/(\d+)/objetivos$#', 'Goals@trainerAthlete'],
+            ['GET', '#^/treinador/objetivos/(\d+)$#', 'Goals@edit'],
+            ['POST', '#^/treinador/objetivos/(\d+)$#', 'Goals@update'],
+            ['POST', '#^/treinador/objetivos/(\d+)/remover$#', 'Goals@remove'],
             ['GET', '#^/app/treinos/(\d+)$#', 'Athlete@workout'],
             ['POST', '#^/app/treinos/(\d+)/registro$#', 'Athlete@logSave'],
             ['POST', '#^/treinador/disponibilidade/(\d+)/remover$#', 'TrainerPanel@availabilityRemove'],

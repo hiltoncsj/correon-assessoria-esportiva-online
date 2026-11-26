@@ -75,8 +75,7 @@
 
 <section class="tile" aria-labelledby="h-obj">
 	<h2 id="h-obj">Objetivos e provas</h2>
-	<?php $items = array_merge($goals['next'], $goals['past']); $base = null; ?>
-	<?php if (!$items): ?><p class="muted">Nenhum registro.</p><?php else: require BASE_PATH . '/views/goals/items.php'; endif; ?>
+	<?php $items = $goals; require BASE_PATH . '/views/goals/items.php'; ?>
 </section>
 
 <div class="grid">

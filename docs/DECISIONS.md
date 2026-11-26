@@ -159,3 +159,9 @@ Aplicado na Hero 6 (`src/data/plans.ts`). **Premissas a confirmar:** (1) valores
 - Tabela `athlete_goals` (prova ou objetivo; corrida, triathlon, natação, ciclismo, trail, outro). Nada é apagado: usa-se "Cancelado".
 - Atleta cadastra e edita os próprios; treinador com vínculo ativo em **qualquer modalidade** vê, cadastra e edita os dos seus atletas (escolha padrão proposta ao cliente; pode ser restringida por modalidade). Admin só consulta. Sem vínculo: 404. O treinador não cadastra provas próprias.
 - **Hero 2 ligada ao cadastro:** `GET /api/v1/public/indicadores` devolve só o total. Contam os registros não cancelados de atletas ativos **com treinador vinculado** (cadastro avulso não infla o número). O site mostra **o maior** entre 49 (valor aprovado) e o total do sistema, para não cair a zero nem somar em dobro enquanto os objetivos antigos não forem lançados. Sem JavaScript ou sem API: 49.
+
+## 2026-11-26 — Objetivos passam a ser uma lista única (substitui o item anterior)
+- Pedido do cliente: **qualquer treinador adiciona, edita e remove**; **cada atleta coloca e tira o próprio nome**. Tabelas `goals` e `goal_participants` (0018); `athlete_goals` (0017) fica sem uso, sem apagar nada.
+- Remover não apaga (`removed_at`); sair não apaga (`left_at`). Meta e resultado são por atleta e preenchidos por ele.
+- Privacidade (regra do projeto: treinador só acessa atletas autorizados): treinador vê o total de inscritos e os nomes apenas dos seus atletas; atleta vê só o total.
+- Hero 2: o total agora é o número de objetivos/provas não removidos (continua valendo o maior entre 49 e o total).

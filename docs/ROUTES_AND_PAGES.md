@@ -43,7 +43,8 @@ Apenas uma rota estática: `/` (`src/pages/index.astro`). Âncoras na mesma pág
 Observação: a Hero 7 hoje lê arquivo estático; para exibir conteúdo cadastrado no admin sem republicar, ela passará a buscar `/api/v1/public/*` (ou o build lerá a API).
 
 ## Objetivos e provas
-- Atleta: `/app/objetivos` (lista e cadastro), `/app/objetivos/{id}` (editar).
-- Treinador: `/treinador/objetivos` (próximos de todos os atletas), `/treinador/atletas/{id}/objetivos`, `/treinador/objetivos/{id}`.
+- Atleta: `/app/objetivos`; `POST /app/objetivos/{id}/entrar|sair|meu`.
+- Treinador (qualquer um): `/treinador/objetivos` (lista e cadastro), `/treinador/objetivos/{id}` (editar), `POST .../remover`.
+- Treinador vinculado: `/treinador/atletas/{id}/objetivos`.
 - Admin: consulta em `/admin/atletas/{id}`.
 - Público: `GET /api/v1/public/indicadores` (somente o total).
