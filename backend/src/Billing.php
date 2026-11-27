@@ -139,6 +139,11 @@ final class Billing
             }
             [$price, $max] = [$row['total'], $row['max']];
             $reason = '';
+            // promoção em vigor no momento da criação: vale só para o anual a preço de tabela
+            if ($period === 'anual' && ($promo = Promo::annualDiscount()) !== null) {
+                $price = Promo::discounted($price, $promo['pct']);
+                $reason = 'Promoção "' . $promo['title'] . '": ' . Promo::pctLabel($promo['pct']) . '% de desconto no anual';
+            }
         } elseif ($cond === 'legacy_120') {
             if ($period !== 'mensal' || count(self::modalitiesOf($product)) !== 1) {
                 return $fail('A condição de aluno antigo (R$ 120) vale para o mensal de uma modalidade. Outros casos: use "Valor negociado" e explique.');
@@ -195,7 +200,10 @@ final class Billing
         return $id;
     }
 
-    /** Renova mantendo produto, período, VALOR e condição (aluno antigo continua antigo). */
+    /**
+     * Renova mantendo produto, período, VALOR e condição (aluno antigo continua antigo).
+     * Exceção: contrato feito com desconto de promoção volta ao preço de tabela atual.
+     */
     public static function renew(int $contractId, int $adminId): array
     {
         $pdo = Db::pdo();
@@ -213,12 +221,24 @@ final class Billing
                 $end = self::endDate($start, $c['period']);
                 $error = self::conflict((int) $c['athlete_id'], $c['product'], $start, $end);
             }
+            if ($error === null) {
+                [$price, $n, $reason] = [(int) $c['price_cents'], (int) $c['installments'], $c['condition_reason']];
+                // só a promoção grava justificativa em contrato a preço de tabela
+                if ($c['price_condition'] === 'standard' && $reason !== null) {
+                    $row = self::priceTable()[$c['product']][$c['period']] ?? null;
+                    if (!$row || $row['total'] === null) {
+                        $error = 'Este contrato foi feito em promoção e não há preço de tabela para renovar. Cadastre o preço em Preços.';
+                    } else {
+                        [$price, $n, $reason] = [$row['total'], min($n, $row['max']), null];
+                    }
+                }
+            }
             if ($error !== null) {
                 $pdo->rollBack();
                 return ['id' => null, 'error' => $error];
             }
-            $id = self::insert((int) $c['athlete_id'], $c['product'], $c['period'], (int) $c['price_cents'], (int) $c['installments'],
-                $c['price_condition'], $c['condition_reason'], $start, $end, $start, $adminId, $contractId);
+            $id = self::insert((int) $c['athlete_id'], $c['product'], $c['period'], $price, $n,
+                $c['price_condition'], $reason, $start, $end, $start, $adminId, $contractId);
             $pdo->commit();
         } catch (\Throwable $e) {
             if ($pdo->inTransaction()) {

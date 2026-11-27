@@ -84,7 +84,7 @@ final class Finance
     private static function contractForm(array $athlete, array $old, ?string $error, int $status): never
     {
         View::render('admin/contract_new', ['title' => 'Novo contrato', 'shell' => 'admin', 'active' => 'atletas',
-            'person' => $athlete, 'old' => $old, 'error' => $error, 'table' => Billing::priceTable()], $status);
+            'person' => $athlete, 'old' => $old, 'error' => $error, 'table' => Billing::priceTable(), 'promo' => Promo::annualDiscount()], $status);
     }
 
     public static function newContract(int $athleteId): never

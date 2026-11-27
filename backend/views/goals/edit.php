@@ -16,7 +16,7 @@
 			<?php foreach ($participants as $p): ?>
 				<li>
 					<a href="/treinador/atletas/<?= (int) $p['id'] ?>"><?= e($p['name']) ?></a>
-					<span class="muted"><?= e(implode(' · ', array_filter([$p['target'] ? 'Meta: ' . $p['target'] : null, $p['result'] ? 'Resultado: ' . $p['result'] : null]))) ?></span>
+					<span class="muted"><?= e($p['result'] ? 'Resultado: ' . $p['result'] : '') ?></span>
 				</li>
 			<?php endforeach; ?>
 		</ul>

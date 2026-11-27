@@ -2,12 +2,10 @@
 <?php if (!$items): ?>
 	<p class="muted">Não está em nenhum objetivo ou prova.</p>
 <?php else: ?>
-	<ul class="done-list">
+	<ul class="goal-list">
 		<?php foreach ($items as $g): ?>
 			<li>
-				<?php require __DIR__ . '/summary.php'; ?>
-				<?php if ($g['target']): ?><span class="muted">Meta: <?= e($g['target']) ?></span><?php endif; ?>
-				<?php if ($g['result']): ?><span class="muted">Resultado: <?= e($g['result']) ?></span><?php endif; ?>
+				<?php $showPersonal = true; require __DIR__ . '/summary.php'; ?>
 			</li>
 		<?php endforeach; ?>
 	</ul>

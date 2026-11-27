@@ -165,3 +165,37 @@ Aplicado na Hero 6 (`src/data/plans.ts`). **Premissas a confirmar:** (1) valores
 - Remover não apaga (`removed_at`); sair não apaga (`left_at`). Meta e resultado são por atleta e preenchidos por ele.
 - Privacidade (regra do projeto: treinador só acessa atletas autorizados): treinador vê o total de inscritos e os nomes apenas dos seus atletas; atleta vê só o total.
 - Hero 2: o total agora é o número de objetivos/provas não removidos (continua valendo o maior entre 49 e o total).
+
+## 2026-11-26 — Loja de uniformes
+- Admin cadastra produtos (foto, preço, tamanhos com estoque); só **atletas** veem e compram; carrinho na sessão; relatório em `/admin/vendas`, separado dos cadastros e das mensalidades.
+- **Sem gateway:** Pix, link de pagamento (https) ou na entrega, com confirmação manual pelo admin. Nenhum dado de cartão. Integração automática (ex.: InfinitePay) depende de aprovação.
+- O pedido reserva o estoque (baixa condicional em transação); cancelar devolve uma única vez. Pedido pago ou entregue não é cancelado (desfazer o pagamento antes). Não há fluxo de troca/devolução.
+- Limites: 10 peças por tamanho no carrinho e 5 pedidos sem pagamento por atleta. Não há prazo para expirar pedido não pago: o admin cancela.
+- **Excluir produto:** sem pedidos, é apagado; com pedidos, sai da loja e das listas (`deleted_at`, 0020) e o histórico de vendas permanece.
+- **Fotos do produto:** até 8, pelo menos uma obrigatória; cada uma tem ícone de excluir (a última não sai); a primeira é a capa. `post_max_size` de produção passou para 36M no `.user.ini`. Tabela `product_images` (0021).
+
+## 2026-11-26 — Resultado da prova e lembrete por e-mail
+- O atleta registra o resultado **a partir do dia da prova** (antes, só a meta).
+- No dia seguinte, e-mail em HTML com logo para **todos os inscritos** em provas (não em objetivos), uma vez por prova; quem já preencheu recebe texto de conferência. Alcança até 7 dias se a tarefa falhar. Mudar a data da prova reabre o lembrete. Aviso também dentro da plataforma.
+- Disparo por URL protegida (`CRON_TOKEN`), compatível com agendador de hospedagem sem SSH. Migração 0022.
+- **Tipo "Desafio"** em Objetivos e provas: data opcional; não recebe o e-mail do dia seguinte (só "Prova").
+- **Data de início e de fim** (0023): fim opcional e nunca antes do início. A data de fim (ou a de início, sem fim) decide quando vira "Anteriores", quando o resultado é liberado e quando sai o lembrete.
+- **Só "Meu resultado":** a pedido do cliente, o campo de meta saiu das telas e o resultado pode ser preenchido a qualquer momento (substitui a liberação por data). A coluna `target` permanece no banco, sem uso. O lembrete por e-mail não muda.
+- **Sair** leva à página principal do site (`SITE_URL`; `/` em produção), não mais à tela de entrada.
+
+## 2026-11-26 — Excluir conta de atleta
+- Botão na página do atleta. **Recusa** com contrato vigente, cobrança em aberto, Personal ativo/marcado ou pedido em aberto.
+- Sem histórico: apaga. Com histórico: encerra os vínculos, tira o nome dos objetivos, retira a autorização de publicação, apaga o perfil (telefone, nascimento, emergência), bloqueia, anonimiza o e-mail e mantém treinos, contratos, pagamentos e pedidos. O nome permanece no histórico com "(excluído)": um pedido de eliminação pela LGPD pode exigir tratamento adicional.
+- **Loja do treinador** (`/treinador/loja`, `/treinador/pedidos`): compra como o atleta, com os mesmos limites e pedidos próprios. Produtos continuam geridos só pelo admin. Em `orders`, `athlete_id` é o comprador.
+
+## 2026-11-26 — Promoção temporária no topo do site
+- Admin → Promoção: título, texto e botão opcionais, início e fim (data e hora, Brasília), imagem (4 MB) ou vídeo MP4/WebM (30 MB). Tabela `promotions` (0024).
+- Site: faixa com cronômetro (relógio do servidor) + mídia acima do cabeçalho; sobe com a rolagem; some ao zerar. Fora do período nada é inserido. Sem JavaScript ou sem API, a página fica como sempre.
+- Com mais de uma no período, vale a que começou por último. Vídeo sem som, em repetição, com controles; não toca sozinho com movimento reduzido.
+- `.user.ini`: `upload_max_filesize` 32M. O limite real da hospedagem precisa ser confirmado.
+
+## 2026-11-26 — Desconto da promoção no plano anual
+- Percentual opcional em Admin → Promoção (coluna `promotions.annual_discount_pct`, 0025). Vale só durante a promoção em vigor.
+- Todos os preços anuais, **somado** ao desconto do combo (calculado sobre o preço anual já com combo).
+- Vale no site (Hero 6) e no contrato anual novo a "Preço de tabela" (conta o momento da criação). 
+- **Renovação de contrato feito com o desconto volta ao preço de tabela atual** (pedido do cliente), mesmo com promoção no ar. Os demais contratos continuam renovando pelo valor anterior.

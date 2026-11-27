@@ -10,9 +10,9 @@ namespace Correon;
  */
 final class Goals
 {
-    public const KINDS = ['prova' => 'Prova', 'objetivo' => 'Objetivo'];
+    public const KINDS = ['prova' => 'Prova', 'objetivo' => 'Objetivo', 'desafio' => 'Desafio'];
     public const SPORTS = ['corrida' => 'Corrida', 'triathlon' => 'Triathlon', 'natacao' => 'Natação', 'ciclismo' => 'Ciclismo', 'trail' => 'Trail', 'outro' => 'Outro'];
-    private const EMPTY = ['kind' => 'prova', 'sport' => '', 'name' => '', 'target_date' => '', 'distance' => '', 'city' => '', 'details' => ''];
+    private const EMPTY = ['kind' => 'prova', 'sport' => '', 'name' => '', 'target_date' => '', 'end_date' => '', 'distance' => '', 'city' => '', 'details' => ''];
 
     /** Total exibido no site: objetivos cadastrados e não removidos. */
     public static function publicCount(): int
@@ -44,7 +44,8 @@ final class Goals
         $out = ['next' => [], 'past' => []];
         $today = date('Y-m-d');
         foreach ($rows as $g) {
-            $out[$g['target_date'] === null || $g['target_date'] >= $today ? 'next' : 'past'][] = $g;
+            $last = self::lastDay($g);
+            $out[$last === null || $last >= $today ? 'next' : 'past'][] = $g;
         }
         $out['past'] = array_reverse($out['past']);
         return $out;
@@ -73,9 +74,15 @@ final class Goals
         } elseif (mb_strlen($v['name']) < 2 || mb_strlen($v['name']) > 150) {
             $err = 'Informe o nome (2 a 150 caracteres).';
         } elseif ($v['target_date'] !== '' && !self::validDate($v['target_date'])) {
-            $err = 'Data inválida.';
+            $err = 'Data de início inválida.';
+        } elseif ($v['end_date'] !== '' && !self::validDate($v['end_date'])) {
+            $err = 'Data de fim inválida.';
         } elseif ($v['kind'] === 'prova' && $v['target_date'] === '') {
-            $err = 'Informe a data da prova.';
+            $err = 'Informe a data de início da prova.';
+        } elseif ($v['end_date'] !== '' && $v['target_date'] === '') {
+            $err = 'Para ter data de fim, informe a data de início.';
+        } elseif ($v['end_date'] !== '' && $v['end_date'] < $v['target_date']) {
+            $err = 'A data de fim não pode ser antes da data de início.';
         } else {
             foreach (['distance' => [60, 'Distância'], 'city' => [100, 'Cidade'], 'details' => [500, 'Observações']] as $k => [$max, $label]) {
                 if (mb_strlen($v[$k]) > $max) {
@@ -97,7 +104,7 @@ final class Goals
     private static function columns(array $v): array
     {
         $n = static fn (string $s) => $s === '' ? null : $s;
-        return [$v['kind'], $v['sport'], $v['name'], $n($v['target_date']), $n($v['distance']), $n($v['city']), $n($v['details'])];
+        return [$v['kind'], $v['sport'], $v['name'], $n($v['target_date']), $n($v['end_date']), $n($v['distance']), $n($v['city']), $n($v['details'])];
     }
 
     // ---- atleta ----
@@ -128,7 +135,13 @@ final class Goals
         Http::redirect('/app/objetivos');
     }
 
-    /** Meta e resultado pessoais do atleta inscrito. */
+    /** Data de fim, ou a de início quando não há fim. @param array<string,mixed> $g */
+    public static function lastDay(array $g): ?string
+    {
+        return $g['end_date'] ?? $g['target_date'];
+    }
+
+    /** Resultado pessoal do atleta inscrito (pode ser preenchido a qualquer momento). */
     public static function mine(int $goalId): never
     {
         $u = App::require('athlete');
@@ -136,14 +149,12 @@ final class Goals
         if (!Db::one('SELECT 1 ok FROM goal_participants WHERE goal_id = ? AND athlete_id = ? AND left_at IS NULL', [$goalId, $u['id']])) {
             App::notFound();
         }
-        $target = trim(Http::input('target'));
         $result = trim(Http::input('result'));
-        if (mb_strlen($target) > 150 || mb_strlen($result) > 500) {
-            Http::flash('err', 'Meta: até 150 caracteres. Resultado: até 500.');
+        if (mb_strlen($result) > 500) {
+            Http::flash('err', 'Resultado: até 500 caracteres.');
         } else {
-            Db::run('UPDATE goal_participants SET target = ?, result = ? WHERE goal_id = ? AND athlete_id = ?',
-                [$target === '' ? null : $target, $result === '' ? null : $result, $goalId, $u['id']]);
-            Http::flash('ok', 'Meta e resultado salvos.');
+            Db::run('UPDATE goal_participants SET result = ? WHERE goal_id = ? AND athlete_id = ?', [$result === '' ? null : $result, $goalId, $u['id']]);
+            Http::flash('ok', 'Resultado salvo.');
         }
         Http::redirect('/app/objetivos');
     }
@@ -170,7 +181,7 @@ final class Goals
         if ($err !== null) {
             self::renderTrainer($v, $err, 422);
         }
-        Db::run('INSERT INTO goals (created_by, kind, sport, name, target_date, distance, city, details) VALUES (?,?,?,?,?,?,?,?)',
+        Db::run('INSERT INTO goals (created_by, kind, sport, name, target_date, end_date, distance, city, details) VALUES (?,?,?,?,?,?,?,?,?)',
             [$u['id'], ...self::columns($v)]);
         Audit::log('goal_created', (int) $u['id'], 'goal', (int) Db::pdo()->lastInsertId());
         Http::flash('ok', 'Cadastrado.');
@@ -203,12 +214,15 @@ final class Goals
     public static function update(int $goalId): never
     {
         $u = App::require('trainer');
-        self::active($goalId);
+        $before = self::active($goalId);
         [$v, $err] = self::posted();
         if ($err !== null) {
             self::renderEdit((int) $u['id'], $goalId, $v, $err, 422);
         }
-        Db::run('UPDATE goals SET kind = ?, sport = ?, name = ?, target_date = ?, distance = ?, city = ?, details = ? WHERE id = ?',
+        if (($before['target_date'] ?? '') !== $v['target_date'] || ($before['end_date'] ?? '') !== $v['end_date']) {
+            Db::run('UPDATE goal_participants SET reminded_at = NULL WHERE goal_id = ?', [$goalId]); // nova data, novo lembrete
+        }
+        Db::run('UPDATE goals SET kind = ?, sport = ?, name = ?, target_date = ?, end_date = ?, distance = ?, city = ?, details = ? WHERE id = ?',
             [...self::columns($v), $goalId]);
         Audit::log('goal_updated', (int) $u['id'], 'goal', $goalId);
         Http::flash('ok', 'Alterações salvas.');

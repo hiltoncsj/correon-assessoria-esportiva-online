@@ -48,3 +48,12 @@ Observação: a Hero 7 hoje lê arquivo estático; para exibir conteúdo cadastr
 - Treinador vinculado: `/treinador/atletas/{id}/objetivos`.
 - Admin: consulta em `/admin/atletas/{id}`.
 - Público: `GET /api/v1/public/indicadores` (somente o total).
+
+## Loja
+- Atleta: `/app/loja`, `/app/loja/carrinho`, `/app/pedidos`, `/app/pedidos/{id}`.
+- Admin: `/admin/loja` (produtos e pagamento), `/admin/loja/novo|{id}`, `/admin/pedidos`, `/admin/vendas`.
+- Excluir produto: `POST /admin/loja/{id}/excluir`.
+- Excluir foto: `POST /admin/loja/imagem/{id}/excluir`.
+
+## Promoção
+- Admin: `/admin/promocao`, `/admin/promocao/novo|{id}`. Público: `/api/v1/public/promocao` e `/api/v1/public/promocao/midia/{id}`.

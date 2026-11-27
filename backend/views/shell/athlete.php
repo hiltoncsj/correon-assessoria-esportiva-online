@@ -10,6 +10,8 @@ $items = [
 	'objetivos' => ['/app/objetivos', 'Objetivos e provas'],
 	'personal' => ['/app/personal', 'Personal Trainer'],
 	'assinaturas' => ['/app/assinaturas', 'Assinaturas'],
+	'loja' => ['/app/loja', 'Loja'],
+	'pedidos' => ['/app/pedidos', 'Meus pedidos'],
 	'privacidade' => ['/app/privacidade', 'Privacidade'],
 	'senha' => ['/app/senha', 'Alterar senha'],
 ];

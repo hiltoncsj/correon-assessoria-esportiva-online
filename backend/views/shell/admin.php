@@ -1,4 +1,5 @@
 <?php /** @var string $inner @var string $active */
+$openOrders = \Correon\ShopAdmin::openCount();
 $items = [
 	'inicio' => ['/admin', 'Início'],
 	'atletas' => ['/admin/atletas', 'Atletas'],
@@ -7,6 +8,10 @@ $items = [
 	'contratos' => ['/admin/contratos', 'Contratos'],
 	'precos' => ['/admin/precos', 'Preços'],
 	'financeiro' => ['/admin/financeiro', 'Financeiro'],
+	'loja' => ['/admin/loja', 'Loja'],
+	'pedidos' => ['/admin/pedidos', 'Pedidos' . ($openOrders ? " ($openOrders)" : '')],
+	'vendas' => ['/admin/vendas', 'Vendas'],
+	'promocao' => ['/admin/promocao', 'Promoção'],
 	'conteudo' => ['/admin/conteudo', 'Conteúdo'],
 	'comunicados' => ['/admin/comunicados', 'Comunicados'],
 	'relatorios' => ['/admin/relatorios', 'Relatórios'],

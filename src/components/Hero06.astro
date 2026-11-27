@@ -401,6 +401,9 @@ const discount = (total: number, monthly: number | null, n: number): number =>
 		font: 400 var(--text-label) / 1.2 var(--font-body);
 		color: var(--color-text-secondary);
 	}
+	.opt__price :global(.opt__was) {
+		color: var(--color-text-secondary);
+	}
 	.opt__split {
 		font: 400 0.75rem / 1.2 var(--font-body);
 		color: var(--color-text-secondary);
@@ -679,6 +682,34 @@ const discount = (total: number, monthly: number | null, n: number): number =>
 		const savingEl = root.querySelector<HTMLElement>('[data-saving]')!;
 		const savingValue = root.querySelector<HTMLElement>('[data-saving-value]')!;
 
+		// Desconto da promoção no anual, em centésimos de % (vem do PromoTop). Mesma conta do servidor.
+		let off = 0;
+		const sale = (price: number, period: string) =>
+			period === 'anual' && off ? Math.round((Math.round(price * 100) * (10000 - off)) / 10000) / 100 : price;
+
+		// Reescreve os cartões do anual (preço, parcela e desconto em relação ao mensal).
+		const paintCards = () => {
+			mods.forEach((m) => {
+				const table = prices[m.dataset.mod!]?.anual ?? null;
+				const opt = m.querySelector<HTMLInputElement>('.opt__input[value="anual"]')?.closest('label');
+				if (!opt || table === null) return;
+				const price = sale(table, 'anual');
+				const priceEl = opt.querySelector<HTMLElement>('.opt__price')!;
+				priceEl.textContent = brl.format(price);
+				if (price < table) {
+					const was = document.createElement('s');
+					was.className = 'opt__was';
+					was.textContent = brl.format(table);
+					priceEl.prepend(was, ' ');
+				}
+				const split = opt.querySelector<HTMLElement>('.opt__split');
+				if (split) split.textContent = `até ${parcels.anual}x de ${brl.format(price / parcels.anual)}`;
+				const monthly = prices[m.dataset.mod!]?.mensal ?? null;
+				const offEl = opt.querySelector<HTMLElement>('.opt__off');
+				if (offEl && monthly) offEl.textContent = `${pct.format((1 - price / monthsOf.anual / monthly) * 100)}% de desconto`;
+			});
+		};
+
 		type Bundle = { modalities: string[]; prices: Record<string, number | null> };
 		const bundles: Bundle[] = JSON.parse(root.dataset.bundles ?? '[]');
 		const exclusive: string[][] = JSON.parse(root.dataset.exclusive ?? '[]');
@@ -726,11 +757,14 @@ const discount = (total: number, monthly: number | null, n: number): number =>
 				const original = monthly.every((v) => v !== null)
 					? (monthly as number[]).reduce((a, v) => a + v, 0) * (monthsOf[period] ?? 1)
 					: undefined;
-				lines.push({ ids: b.modalities, names: parts.map((p) => p.name), period, price, combo: true, original });
+				lines.push({ ids: b.modalities, names: parts.map((p) => p.name), period, price: sale(price, period), combo: true, original });
 			});
 			picked.forEach((p) => {
 				if (used.has(p.id)) return;
-				lines.push({ ids: [p.id], names: [p.name], period: p.period, price: prices[p.id]?.[p.period] ?? null, combo: false });
+				const table = prices[p.id]?.[p.period] ?? null;
+				const price = table === null ? null : sale(table, p.period);
+				const original = table !== null && price !== null && price < table ? table : undefined;
+				lines.push({ ids: [p.id], names: [p.name], period: p.period, price, combo: false, original });
 			});
 
 			// 3) Desenha o resumo e o total.
@@ -753,8 +787,8 @@ const discount = (total: number, monthly: number | null, n: number): number =>
 					val.textContent = 'Em breve';
 				} else {
 					total += l.price;
-					if (l.combo && l.original !== undefined && l.original > l.price) {
-						// Valor pagando mês a mês, riscado + preço do plano combinado
+					if (l.original !== undefined && l.original > l.price) {
+						// Valor de referência riscado + preço do plano combinado ou da promoção
 						const was = document.createElement('s');
 						was.className = 'line__was';
 						was.textContent = brl.format(l.original);
@@ -778,6 +812,12 @@ const discount = (total: number, monthly: number | null, n: number): number =>
 					const note = document.createElement('span');
 					note.className = 'line__note';
 					note.textContent = `Pagando mês a mês: ${brl.format(l.original)} · ${pct.format((diff / l.original) * 100)}% de desconto em relação ao mensal: economia de ${brl.format(diff)}`;
+					li.append(note);
+				}
+				if (off && l.period === 'anual' && l.price !== null) {
+					const note = document.createElement('span');
+					note.className = 'line__note';
+					note.textContent = `Promoção: ${pct.format(off / 100)}% de desconto no plano anual`;
 					li.append(note);
 				}
 				list.append(li);
@@ -811,6 +851,15 @@ const discount = (total: number, monthly: number | null, n: number): number =>
 		cta.addEventListener('click', (e) => {
 			if (cta.getAttribute('aria-disabled') === 'true') e.preventDefault();
 		});
+		const applyPromo = () => {
+			const next = Math.round(Number(document.documentElement.dataset.promoAnnual ?? 0) * 100);
+			if (next === off) return;
+			off = next;
+			paintCards();
+			render();
+		};
+		document.addEventListener('promo:annual', applyPromo);
 		render();
+		applyPromo();
 	}
 </script>

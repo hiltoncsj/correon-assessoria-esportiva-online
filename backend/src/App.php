@@ -42,6 +42,13 @@ final class App
             'POST /sair' => 'logout',
             'GET /app' => 'Athlete@dashboard', 'GET /app/perfil' => 'Athlete@profileForm', 'POST /app/perfil' => 'Athlete@profileSave',
             'GET /app/objetivos' => 'Goals@athleteList', 'GET /treinador/objetivos' => 'Goals@trainerList', 'POST /treinador/objetivos' => 'Goals@create',
+            'GET /app/loja' => 'Shop@catalog', 'GET /app/loja/carrinho' => 'Shop@viewCart', 'POST /app/loja/carrinho' => 'Shop@add',
+            'POST /app/loja/carrinho/remover' => 'Shop@removeFromCart', 'POST /app/loja/pedido' => 'Shop@checkout', 'GET /app/pedidos' => 'Shop@myOrders',
+            'GET /treinador/loja' => 'Shop@catalog', 'GET /treinador/loja/carrinho' => 'Shop@viewCart', 'POST /treinador/loja/carrinho' => 'Shop@add',
+            'POST /treinador/loja/carrinho/remover' => 'Shop@removeFromCart', 'POST /treinador/loja/pedido' => 'Shop@checkout', 'GET /treinador/pedidos' => 'Shop@myOrders',
+            'GET /admin/promocao' => 'Promo@index', 'GET /admin/promocao/novo' => 'Promo@newForm', 'POST /admin/promocao/novo' => 'Promo@create',
+            'GET /admin/loja' => 'ShopAdmin@products', 'POST /admin/loja/pagamento' => 'ShopAdmin@saveSettings', 'GET /admin/loja/novo' => 'ShopAdmin@newProduct',
+            'POST /admin/loja/novo' => 'ShopAdmin@createProduct', 'GET /admin/pedidos' => 'ShopAdmin@orders', 'GET /admin/vendas' => 'ShopAdmin@sales',
             'GET /app/senha' => 'Account@form', 'POST /app/senha' => 'Account@save',
             'GET /treinador/senha' => 'Account@form', 'POST /treinador/senha' => 'Account@save',
             'GET /admin/senha' => 'Account@form', 'POST /admin/senha' => 'Account@save',
@@ -75,6 +82,23 @@ final class App
             ['GET', '#^/treinador/objetivos/(\d+)$#', 'Goals@edit'],
             ['POST', '#^/treinador/objetivos/(\d+)$#', 'Goals@update'],
             ['POST', '#^/treinador/objetivos/(\d+)/remover$#', 'Goals@remove'],
+            ['GET', '#^/app/loja/imagem/(\d+)$#', 'Shop@image'],
+            ['GET', '#^/app/pedidos/(\d+)$#', 'Shop@myOrder'],
+            ['POST', '#^/app/pedidos/(\d+)/cancelar$#', 'Shop@cancelMine'],
+            ['GET', '#^/treinador/loja/imagem/(\d+)$#', 'Shop@image'],
+            ['GET', '#^/treinador/pedidos/(\d+)$#', 'Shop@myOrder'],
+            ['POST', '#^/treinador/pedidos/(\d+)/cancelar$#', 'Shop@cancelMine'],
+            ['GET', '#^/admin/promocao/(\d+)$#', 'Promo@edit'],
+            ['POST', '#^/admin/promocao/(\d+)$#', 'Promo@update'],
+            ['POST', '#^/admin/promocao/(\d+)/excluir$#', 'Promo@delete'],
+            ['GET', '#^/admin/promocao/(\d+)/midia$#', 'Promo@media'],
+            ['GET', '#^/admin/loja/imagem/(\d+)$#', 'ShopAdmin@image'],
+            ['POST', '#^/admin/loja/imagem/(\d+)/excluir$#', 'ShopAdmin@deleteImage'],
+            ['GET', '#^/admin/loja/(\d+)$#', 'ShopAdmin@editProduct'],
+            ['POST', '#^/admin/loja/(\d+)$#', 'ShopAdmin@updateProduct'],
+            ['POST', '#^/admin/loja/(\d+)/excluir$#', 'ShopAdmin@deleteProduct'],
+            ['GET', '#^/admin/pedidos/(\d+)$#', 'ShopAdmin@order'],
+            ['POST', '#^/admin/pedidos/(\d+)$#', 'ShopAdmin@orderAction'],
             ['GET', '#^/app/treinos/(\d+)$#', 'Athlete@workout'],
             ['POST', '#^/app/treinos/(\d+)/registro$#', 'Athlete@logSave'],
             ['POST', '#^/treinador/disponibilidade/(\d+)/remover$#', 'TrainerPanel@availabilityRemove'],
@@ -104,7 +128,7 @@ final class App
             ['POST', '#^/admin/treinadores/(\d+)/modalidades$#', 'Admin@setModalities'],
             ['POST', '#^/admin/usuarios/(\d+)/status$#', 'Admin@setStatus'],
             ['POST', '#^/admin/usuarios/(\d+)/senha$#', 'Admin@resetPassword'],
-            ['POST', '#^/admin/usuarios/(\d+)/excluir$#', 'Admin@deleteTrainer'],
+            ['POST', '#^/admin/usuarios/(\d+)/excluir$#', 'Admin@deleteUser'],
             ['GET', '#^/treinador/atletas/(\d+)$#', 'Trainer@athlete'],
             ['POST', '#^/treinador/atletas/(\d+)/zonas$#', 'Trainer@zonesSave'],
             ['POST', '#^/treinador/atletas/(\d+)/nivel$#', 'Trainer@levelSave'],
@@ -200,9 +224,9 @@ final class App
             Audit::log('logout', (int) $u['id'], 'user', (int) $u['id']);
         }
         Auth::logout();
-        Http::startSession();
-        Http::flash('ok', 'Você saiu da sua conta.');
-        Http::redirect('/entrar');
+        // sai para a página principal do site (endereço vem da configuração, nunca do usuário)
+        header('Location: ' . View::site(), true, 303);
+        exit;
     }
 
     // ---- Troca obrigatória da senha provisória --------------------------

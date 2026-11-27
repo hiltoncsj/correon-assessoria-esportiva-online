@@ -1,0 +1,247 @@
+---
+// Promoção temporária acima do cabeçalho: faixa com cronômetro + destaque com imagem ou vídeo.
+// Os dados vêm de /api/v1/public/promocao (painel do admin). Fora do período, nada é inserido
+// e a página fica como sempre. Rolando, este bloco sobe e o cabeçalho fixa no topo.
+---
+
+<div data-promo></div>
+
+<script>
+	type Promo = {
+		title: string; text: string | null; buttonLabel: string | null; link: string | null;
+		endsAt: string; now: string; type: 'image' | 'video'; media: string; annualDiscountPct: number | null;
+	};
+
+	const slot = document.querySelector<HTMLElement>('[data-promo]');
+
+	const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = '') => {
+		const node = document.createElement(tag);
+		node.className = className;
+		node.textContent = text;
+		return node;
+	};
+
+	// avisa a seção de planos (Hero 6) do desconto no anual; 0 = preços normais
+	const announce = (pct: number) => {
+		document.documentElement.dataset.promoAnnual = String(pct);
+		document.dispatchEvent(new CustomEvent('promo:annual'));
+	};
+
+	function show(host: HTMLElement, p: Promo) {
+		// usa o relógio do servidor: relógio errado no aparelho não muda o cronômetro
+		const offset = Date.parse(p.now) - Date.now();
+		const remaining = () => Date.parse(p.endsAt) - (Date.now() + offset);
+		if (!(remaining() > 0)) return;
+		announce(p.annualDiscountPct ?? 0);
+
+		const box = el('section', 'promo');
+		box.setAttribute('aria-label', 'Promoção: ' + p.title);
+
+		const bar = el('div', 'promo__bar');
+		const timer = el('div', 'promo__timer');
+		timer.setAttribute('role', 'timer');
+		const values = ['dias', 'horas', 'min', 'seg'].map((label) => {
+			const unit = el('span', 'promo__unit');
+			const value = el('strong', 'promo__value', '00');
+			unit.append(value, el('small', '', label));
+			timer.append(unit);
+			return value;
+		});
+		bar.append(el('p', 'promo__title', p.title), timer);
+
+		const stage = el('div', 'promo__stage');
+		let media: HTMLImageElement | HTMLVideoElement;
+		if (p.type === 'video') {
+			const video = el('video', 'promo__media');
+			video.muted = true;
+			video.loop = true;
+			video.playsInline = true;
+			video.controls = true;
+			video.preload = 'metadata';
+			video.autoplay = !matchMedia('(prefers-reduced-motion: reduce)').matches;
+			video.setAttribute('aria-label', p.title);
+			media = video;
+		} else {
+			const img = el('img', 'promo__media');
+			img.alt = p.text ? `${p.title}. ${p.text}` : p.title;
+			media = img;
+		}
+		media.src = p.media;
+		stage.append(media);
+
+		const info = el('div', 'promo__info');
+		if (p.text) info.append(el('p', 'promo__text', p.text));
+		if (p.link && p.buttonLabel) {
+			const a = el('a', 'promo__cta', p.buttonLabel);
+			a.href = p.link;
+			info.append(a);
+		}
+		// texto e botão ficam sobre a imagem/vídeo
+		if (info.childElementCount) stage.append(info);
+		box.append(bar, stage);
+
+		// quem já rolou a página continua vendo o mesmo ponto quando o bloco entra ou sai
+		const keepPlace = (change: () => void, height: () => number, sign: 1 | -1) => {
+			const scrolled = window.scrollY;
+			const before = sign === -1 ? height() : 0;
+			change();
+			if (scrolled > 0) window.scrollTo({ top: Math.max(0, scrolled + sign * (sign === 1 ? height() : before)), behavior: 'instant' });
+		};
+
+		keepPlace(() => host.append(box), () => box.offsetHeight, 1);
+		if (location.hash) document.getElementById(location.hash.slice(1))?.scrollIntoView({ behavior: 'instant' });
+
+		let id = 0;
+		const tick = () => {
+			const ms = remaining();
+			if (ms <= 0) {
+				clearInterval(id);
+				announce(0);
+				keepPlace(() => box.remove(), () => box.offsetHeight, -1);
+				return;
+			}
+			const s = Math.floor(ms / 1000);
+			[Math.floor(s / 86400), Math.floor(s / 3600) % 24, Math.floor(s / 60) % 60, s % 60]
+				.forEach((n, i) => (values[i].textContent = String(n).padStart(2, '0')));
+		};
+		tick();
+		id = window.setInterval(tick, 1000);
+	}
+
+	if (slot) {
+		fetch('/api/v1/public/promocao', { headers: { Accept: 'application/json' }, cache: 'no-store' })
+			.then((r) => (r.ok ? r.json() : Promise.reject()))
+			.then((data: { promo?: Promo | null }) => {
+				if (data.promo) show(slot, data.promo);
+			})
+			.catch(() => {});
+	}
+</script>
+
+<style is:global>
+	.promo {
+		position: relative;
+		background: var(--color-background-primary);
+		color: var(--color-text-primary);
+	}
+	.promo__bar {
+		position: absolute;
+		inset: 0 0 auto 0;
+		z-index: 1;
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: center;
+		gap: var(--space-xs) var(--space-lg);
+		padding: var(--space-sm) var(--layout-gutter);
+		background: var(--color-accent);
+		color: var(--color-on-accent);
+	}
+	.promo__title {
+		margin: 0;
+		font: 800 clamp(1rem, 2.5vw, 1.5rem) / 1.2 var(--font-heading);
+		text-transform: uppercase;
+		text-align: center;
+		overflow-wrap: anywhere;
+	}
+	.promo__timer {
+		display: flex;
+		gap: var(--space-xs);
+		font-variant-numeric: tabular-nums;
+	}
+	.promo__unit {
+		display: grid;
+		justify-items: center;
+		min-width: 3.25rem;
+		padding: 0.25rem var(--space-xs);
+		border-radius: var(--radius-sm);
+		background: var(--color-brand-dark);
+		color: var(--color-brand-light);
+	}
+	.promo__value {
+		font: 800 1.25rem / 1.1 var(--font-display);
+		color: var(--color-accent);
+	}
+	.promo__unit small {
+		font: var(--font-weight-label) 0.625rem / 1.2 var(--font-label);
+		letter-spacing: var(--letter-spacing-label);
+		text-transform: uppercase;
+	}
+	.promo__stage {
+		position: relative;
+		height: 100vh;
+		overflow: hidden;
+		background: var(--color-brand-dark);
+	}
+	/* largura de 100% = a tela inteira sem criar rolagem horizontal (100vw somaria a barra) */
+	.promo__media {
+		display: block;
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+	}
+	.promo__info {
+		position: absolute;
+		inset: auto 0 0 0;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: var(--space-md);
+		padding: var(--space-md) var(--layout-gutter) var(--space-xl);
+		text-align: center;
+		color: var(--color-brand-light);
+		text-shadow: 0 0.1em 0.6em var(--color-brand-dark), 0 0 0.2em var(--color-brand-dark);
+		pointer-events: none;
+	}
+	/* deixa livres os controles do vídeo */
+	video + .promo__info {
+		padding-bottom: 4.5rem;
+	}
+	.promo__text {
+		margin: 0;
+		max-width: 40rem;
+		font: 800 clamp(1.5rem, 4vw, 3rem) / 1.15 var(--font-heading);
+		text-transform: uppercase;
+		overflow-wrap: anywhere;
+	}
+	.promo__cta {
+		pointer-events: auto;
+		display: inline-flex;
+		align-items: center;
+		min-height: 3rem;
+		padding: 0 var(--space-lg);
+		border: 2px solid var(--color-brand-light);
+		border-radius: var(--radius-pill);
+		background: transparent;
+		color: var(--color-brand-light);
+		font: var(--font-weight-button) var(--text-button) / 1 var(--font-button);
+		letter-spacing: var(--letter-spacing-label);
+		text-transform: uppercase;
+		text-decoration: none;
+		transition: background-color var(--motion-duration-fast) var(--motion-ease),
+			color var(--motion-duration-fast) var(--motion-ease),
+			border-color var(--motion-duration-fast) var(--motion-ease),
+			transform var(--motion-duration-fast) var(--motion-ease);
+	}
+	.promo__cta:hover,
+	.promo__cta:focus-visible {
+		border-color: var(--color-accent);
+		background: var(--color-accent);
+		color: var(--color-on-accent);
+		text-shadow: none;
+		transform: scale(1.06);
+	}
+	.promo__cta:focus-visible {
+		outline: 2px solid var(--color-brand-light);
+		outline-offset: 3px;
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.promo__cta {
+			transition: none;
+		}
+		.promo__cta:hover,
+		.promo__cta:focus-visible {
+			transform: none;
+		}
+	}
+</style>

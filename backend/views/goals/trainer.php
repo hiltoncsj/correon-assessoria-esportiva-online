@@ -18,12 +18,11 @@
 	<section class="tile" aria-labelledby="h-<?= $key ?>">
 		<h2 id="h-<?= $key ?>"><?= $heading ?></h2>
 		<?php if (!$goals[$key]): ?><p class="muted">Nada cadastrado.</p><?php else: ?>
-			<ul class="done-list">
+			<ul class="goal-list">
 				<?php foreach ($goals[$key] as $g): ?>
 					<li>
 						<?php require __DIR__ . '/summary.php'; ?>
-						<span class="muted"><?= (int) $g['total'] ?> inscrito(s)</span>
-						<a href="/treinador/objetivos/<?= (int) $g['id'] ?>">Abrir / editar</a>
+						<p class="actions"><a class="btn btn--sm btn--ghost" href="/treinador/objetivos/<?= (int) $g['id'] ?>">Abrir / editar</a></p>
 					</li>
 				<?php endforeach; ?>
 			</ul>

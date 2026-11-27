@@ -22,7 +22,7 @@ final class Media
      * @param array<string,mixed> $file item de $_FILES
      * @return array{id:int|null,error:string|null}
      */
-    public static function store(array $file, int $userId): array
+    public static function store(array $file, int $userId, int $maxWidth = self::MAX_WIDTH): array
     {
         $fail = static fn (string $m) => ['id' => null, 'error' => $m];
         if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK || !is_uploaded_file((string) ($file['tmp_name'] ?? ''))) {
@@ -54,7 +54,7 @@ final class Media
         }
         $w = imagesx($img);
         $h = imagesy($img);
-        $nw = min($w, self::MAX_WIDTH);
+        $nw = min($w, $maxWidth);
         $nh = (int) max(1, round($h * $nw / $w));
         $out = imagecreatetruecolor($nw, $nh);
         imagefill($out, 0, 0, imagecolorallocate($out, 255, 255, 255));
@@ -70,6 +70,20 @@ final class Media
         }
         Db::run('INSERT INTO media (filename, mime, width, height, uploaded_by) VALUES (?,?,?,?,?)', [$name, $webp ? 'image/webp' : 'image/jpeg', $nw, $nh, $userId]);
         return ['id' => (int) Db::pdo()->lastInsertId(), 'error' => null];
+    }
+
+    /** Apaga o registro e o arquivo. Só para mídia que não está mais em uso. */
+    public static function delete(int $id): void
+    {
+        $m = Db::one('SELECT filename FROM media WHERE id = ?', [$id]);
+        if (!$m) {
+            return;
+        }
+        Db::run('DELETE FROM media WHERE id = ?', [$id]);
+        $path = self::dir() . '/' . basename($m['filename']);
+        if (is_file($path)) {
+            @unlink($path);
+        }
     }
 
     public static function output(int $id, bool $public): never

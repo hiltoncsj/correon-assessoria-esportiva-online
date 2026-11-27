@@ -125,19 +125,3 @@ html {
 [data-roll] {
   position: relative;
 }
-.skip-link {
-  position: absolute;
-  left: var(--layout-gutter);
-  top: 0;
-  z-index: calc(var(--z-menu) + 1);
-  padding: var(--space-sm) var(--space-md);
-  background: var(--color-accent);
-  color: var(--color-on-accent);
-  font: var(--font-weight-button) var(--text-button) / 1 var(--font-button);
-  text-decoration: none;
-  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
-  transform: translateY(-120%);
-}
-.skip-link:focus {
-  transform: translateY(0);
-}

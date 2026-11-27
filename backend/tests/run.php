@@ -7,6 +7,7 @@ declare(strict_types=1);
  */
 putenv('DB_NAME=correon_test');
 putenv('MAIL_DRIVER=log');
+putenv('CRON_TOKEN=' . str_repeat('t', 40));
 putenv('APP_ENV=local');
 putenv('APP_URL=http://localhost:8099');
 require dirname(__DIR__) . '/src/bootstrap.php';
@@ -18,9 +19,13 @@ if (!str_ends_with((string) Correon\Env::get('DB_NAME'), '_test')) {
 }
 
 $php = PHP_BINARY;
+// storage/uploads é compartilhada com o banco de desenvolvimento: o que já existe NÃO pode ser apagado
+$devUploads = glob(BASE_PATH . '/storage/uploads/*') ?: [];
+$testUploads = static fn (): array => array_diff(glob(BASE_PATH . '/storage/uploads/*') ?: [], $devUploads);
+register_shutdown_function(static function () use ($testUploads) { array_map('unlink', $testUploads()); });
 $pdo = Db::pdo();
 $pdo->exec('SET FOREIGN_KEY_CHECKS=0');
-foreach (['workout_template_items', 'workout_template_sessions', 'workout_templates', 'athlete_hr_zones', 'athlete_hr_settings', 'goal_participants', 'goals', 'athlete_goals', 'trainer_modalities', 'contents', 'media', 'notifications', 'pt_sessions', 'pt_packages', 'contract_events', 'charges', 'contracts', 'plan_prices', 'trainer_settings', 'capacity_exceptions', 'trainer_availability', 'workout_log_revisions', 'workout_logs', 'workout_versions', 'workout_items', 'workouts', 'trainer_athletes', 'modalities', 'athlete_profiles', 'audit_log', 'consents', 'password_resets', 'rate_events', 'user_roles', 'users', 'schema_migrations'] as $t) {
+foreach (['workout_template_items', 'workout_template_sessions', 'workout_templates', 'athlete_hr_zones', 'athlete_hr_settings', 'promotions', 'product_images', 'order_items', 'orders', 'product_variants', 'products', 'shop_settings', 'goal_participants', 'goals', 'athlete_goals', 'trainer_modalities', 'contents', 'media', 'notifications', 'pt_sessions', 'pt_packages', 'contract_events', 'charges', 'contracts', 'plan_prices', 'trainer_settings', 'capacity_exceptions', 'trainer_availability', 'workout_log_revisions', 'workout_logs', 'workout_versions', 'workout_items', 'workouts', 'trainer_athletes', 'modalities', 'athlete_profiles', 'audit_log', 'consents', 'password_resets', 'rate_events', 'user_roles', 'users', 'schema_migrations'] as $t) {
     $pdo->exec("DROP TABLE IF EXISTS $t"); // somente no banco de teste
 }
 $pdo->exec('DROP TABLE IF EXISTS roles');
@@ -145,7 +150,7 @@ check('e-mail duplicado = 422 com mensagem genérica', $s === 422 && str_contain
 
 echo "Logout\n";
 [$s] = $a->post('/sair', [], '/app');
-check('logout redireciona', $s === 303);
+check('logout leva para a página principal', $s === 303 && $a->header('Location') === (string) Correon\Env::get('SITE_URL', '/'));
 [$s] = $a->req('GET', '/app');
 check('após logout /app exige login', $s === 303 && $a->header('Location') === '/entrar');
 
@@ -1278,7 +1283,7 @@ check('ações do Personal auditadas', (int) Db::one("SELECT COUNT(*) c FROM aud
 
 echo "Sprint 8 — conteúdo, consentimento e avisos\n";
 Db::run('DELETE FROM rate_events');
-array_map('unlink', glob(BASE_PATH . '/storage/uploads/*') ?: []);
+array_map('unlink', $testUploads());
 $adm = new Client(); $adm->post('/entrar', ['email' => 'adm@example.com', 'password' => 'senha-staff-12345']);
 $mar = new Client(); $mar->post('/entrar', ['email' => 'maria@example.com', 'password' => 'final-senha-77777']);
 $tr1 = new Client(); $tr1->post('/entrar', ['email' => 'trn@example.com', 'password' => 'senha-staff-12345']);
@@ -1475,7 +1480,7 @@ $limpo = $mkT('del1@example.com');
 [$s, $b] = $adm->req('GET', "/admin/treinadores/$limpo");
 check('página do treinador tem o botão Excluir conta', str_contains($b, "/admin/usuarios/$limpo/excluir"));
 [$s, $b] = $adm->req('GET', "/admin/atletas/" . $uid('eva@example.com'));
-check('página do atleta NÃO tem o botão', !str_contains($b, '/excluir"'));
+check('página do atleta tem o botão Excluir conta', str_contains($b, '/excluir"'));
 [$s] = $del($tr1, $limpo, '/treinador');
 check('treinador não exclui contas (403)', $s === 403 && Db::one('SELECT id FROM users WHERE id = ?', [$limpo]) !== null);
 [$s] = $adm->req('POST', "/admin/usuarios/$limpo/excluir");
@@ -1503,8 +1508,6 @@ $again = $mkT('del2@example.com');
 check('o e-mail pode ser usado em um novo cadastro', $again > 0 && $again !== $com);
 [$s] = $del($adm, $uid('adm@example.com'), '/admin');
 check('administrador não pode ser excluído (404)', $s === 404);
-[$s] = $del($adm, $uid('maria@example.com'), '/admin');
-check('atleta não é excluído por esta ação (404)', $s === 404);
 check('exclusão auditada', (int) Db::one("SELECT COUNT(*) c FROM audit_log WHERE action = 'trainer_deleted'")['c'] === 2);
 
 echo "Modalidades do treinador\n";
@@ -1639,7 +1642,7 @@ $gina = $uid('gina@example.com');
 $goal = static fn (array $o = []) => $o + ['kind' => 'prova', 'sport' => 'natacao', 'name' => 'Travessia Teste', 'target_date' => date('Y-m-d', strtotime('+30 days')), 'distance' => '1,5 km', 'city' => '', 'details' => ''];
 $count = static fn () => (int) Db::one('SELECT COUNT(*) c FROM goals')['c'];
 $public = static function (): array { [$s, $b] = (new Client())->req('GET', '/api/v1/public/indicadores'); return [$s, json_decode($b, true), $b]; };
-foreach (['prova sem data' => ['target_date' => ''], 'data inexistente' => ['target_date' => '2027-02-30'], 'sem nome' => ['name' => ''], 'esporte inválido' => ['sport' => 'xadrez']] as $label => $over) {
+foreach (['fim antes do início' => ['end_date' => date('Y-m-d')], 'fim sem início' => ['kind' => 'desafio', 'target_date' => '', 'end_date' => date('Y-m-d')], 'prova sem data' => ['target_date' => ''], 'data inexistente' => ['target_date' => '2027-02-30'], 'sem nome' => ['name' => ''], 'esporte inválido' => ['sport' => 'xadrez']] as $label => $over) {
     [$s] = $ga->post('/treinador/objetivos', $goal($over), '/treinador/objetivos');
     check("objetivo recusado: $label (422)", $s === 422 && $count() === 0, "status=$s");
 }
@@ -1656,9 +1659,12 @@ check('qualquer treinador edita o que outro criou; texto escapado', $s === 200 &
 $g2->post("/app/objetivos/$id/entrar", [], '/app/objetivos');
 $in = static fn () => (int) Db::one('SELECT COUNT(*) c FROM goal_participants WHERE goal_id = ? AND left_at IS NULL', [$id])['c'];
 check('atletas colocam o próprio nome', $s === 303 && $in() === 2);
-$g1->post("/app/objetivos/$id/meu", ['target' => 'terminar', 'result' => '32:10'], '/app/objetivos');
+$g1->post("/app/objetivos/$id/meu", ['result' => '32:10'], '/app/objetivos');
+check('atleta grava o resultado', Db::one('SELECT result FROM goal_participants WHERE goal_id = ? AND athlete_id = ?', [$id, $gil])['result'] === '32:10');
+Db::run('UPDATE goals SET target_date = ? WHERE id = ?', [date('Y-m-d', strtotime('-1 day')), $id]);
+$g1->post("/app/objetivos/$id/meu", ['result' => '32:10'], '/app/objetivos');
 [$s, $b] = $g1->req('GET', '/app/objetivos');
-check('atleta vê o total, não o nome dos outros', str_contains($b, '2 inscrito(s)') && !str_contains($b, 'Gina Sigilo') && str_contains($b, '32:10'));
+check('atleta vê o total, não o nome dos outros', str_contains($b, '<dt>Inscritos</dt><dd>2</dd>') && !str_contains($b, 'Gina Sigilo') && str_contains($b, '32:10'));
 [$s, $b] = $ga->req('GET', "/treinador/objetivos/$id");
 check('treinador sem vínculo vê só a quantidade', str_contains($b, 'Mais 2 inscrito(s)') && !str_contains($b, 'Gil Meta') && !str_contains($b, '32:10'));
 $adm->post("/admin/atletas/$gil/vinculos", ['trainer_id' => (string) $uid('gol-a@example.com'), 'modality' => 'musculacao'], "/admin/atletas/$gil");
@@ -1669,10 +1675,29 @@ check('treinador vê o nome e o resultado só do atleta vinculado', str_contains
 check('objetivos por atleta: só com vínculo (senão 404)', $s === 200 && str_contains($b, 'Travessia') && $s2 === 404);
 [$s, $json, $raw] = $public();
 check('site recebe só o total de objetivos', $s === 200 && $json === ['objetivos' => 1] && !str_contains($raw, 'Travessia'));
+echo "Lembrete de resultado\n";
+$cron = static function (string $token): array { [$s, $b] = (new Client())->req('GET', '/api/v1/cron/lembretes' . ($token === '' ? '' : "?token=$token")); return [$s, json_decode($b, true)]; };
+$key = (string) Correon\Env::get('CRON_TOKEN');
+check('tarefa agendada sem chave ou com chave errada = 404', $cron('')[0] === 404 && $cron(str_repeat('a', 64))[0] === 404);
+array_map('unlink', glob(BASE_PATH . '/storage/mail/*') ?: []);
+[$s, $r] = $cron($key);
+$htmls = glob(BASE_PATH . '/storage/mail/*.html') ?: [];
+$mail = $htmls ? (string) file_get_contents($htmls[0]) : '';
+check('no dia seguinte envia para os dois inscritos', $s === 200 && $r === ['enviados' => 2, 'falhas' => 0] && count($htmls) === 2, json_encode($r));
+check('e-mail tem logo, botão e nome escapado', str_contains($mail, 'data:image/png;base64,') && str_contains($mail, '/app/objetivos') && !str_contains($mail, 'Travessia <b>'));
+check('não envia de novo', $cron($key)[1] === ['enviados' => 0, 'falhas' => 0]);
+Db::run('UPDATE goal_participants SET reminded_at = NULL WHERE goal_id = ?', [$id]);
+Db::run('UPDATE goals SET target_date = CURDATE() WHERE id = ?', [$id]);
+check('no próprio dia da prova ainda não envia', $cron($key)[1]['enviados'] === 0);
+Db::run('UPDATE goals SET target_date = CURDATE() - INTERVAL 3 DAY, end_date = CURDATE() + INTERVAL 1 DAY WHERE id = ?', [$id]);
+check('com data de fim no futuro, não envia', $cron($key)[1]['enviados'] === 0);
+Db::run('UPDATE goals SET end_date = CURDATE() - INTERVAL 1 DAY WHERE id = ?', [$id]);
+check('envia no dia seguinte à data de fim', $cron($key)[1]['enviados'] === 2);
+
 $g1->post("/app/objetivos/$id/sair", [], '/app/objetivos');
 check('atleta tira o próprio nome (histórico mantido)', $in() === 1 && (int) Db::one('SELECT COUNT(*) c FROM goal_participants WHERE goal_id = ?', [$id])['c'] === 2);
-[$s] = $g1->post("/app/objetivos/$id/meu", ['target' => 'x', 'result' => 'y'], '/app/objetivos');
-check('fora do objetivo não grava meta (404)', $s === 404);
+[$s] = $g1->post("/app/objetivos/$id/meu", ['result' => 'y'], '/app/objetivos');
+check('fora do objetivo não grava resultado (404)', $s === 404);
 $g1->post("/app/objetivos/$id/entrar", [], '/app/objetivos');
 check('pode colocar o nome de novo', $in() === 2);
 [$s] = $g1->post("/treinador/objetivos/$id/remover", [], '/app/objetivos');
@@ -1685,6 +1710,270 @@ check('qualquer treinador remove; some para os atletas', $s === 303 && !str_cont
 [$s] = $g1->post("/app/objetivos/$id/entrar", [], '/app/objetivos');
 [$s2] = $ga->req('GET', "/treinador/objetivos/$id");
 check('removido: 404, mas continua guardado no banco', $s === 404 && $s2 === 404 && $count() === 1);
+
+echo "Loja\n";
+Db::run('DELETE FROM rate_events');
+$adm = new Client(); $adm->post('/entrar', ['email' => 'adm@example.com', 'password' => 'senha-staff-12345']);
+$c1 = new Client(); register($c1, ['email' => 'comprador@example.com', 'name' => 'Cida Compradora']);
+$c2 = new Client(); register($c2, ['email' => 'outro-comprador@example.com', 'name' => 'Caio Outro']);
+$send = static function (Client $c, string $path, array $fields, ?string $file = null): array {
+    $fields['_csrf'] = $c->csrf('/admin/loja/novo');
+    $flat = [];
+    $walk = static function (array $a, string $prefix) use (&$walk, &$flat): void {
+        foreach ($a as $k => $v) {
+            $key = $prefix === '' ? (string) $k : "{$prefix}[$k]";
+            is_array($v) ? $walk($v, $key) : $flat[$key] = $v;
+        }
+    };
+    $walk($fields, '');
+    if ($file !== null) {
+        $flat['images[0]'] = new CURLFile($file, 'image/png', 'camiseta.png');
+        $flat['images[1]'] = new CURLFile($file, 'image/png', 'costas.png');
+    }
+    $ch = curl_init('http://127.0.0.1:8099' . $path);
+    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_HEADER => true, CURLOPT_TIMEOUT => 20,
+        CURLOPT_COOKIEFILE => $c->jar, CURLOPT_COOKIEJAR => $c->jar, CURLOPT_POST => true, CURLOPT_POSTFIELDS => $flat]);
+    $raw = (string) curl_exec($ch);
+    $status = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+    curl_close($ch);
+    return [$status, $raw];
+};
+$prod = static fn (array $o = []) => $o + ['name' => 'Camiseta Teste', 'price' => '89,90', 'description' => '<script>x</script>', 'active' => '1', '_end' => '1',
+    'new' => [['size' => 'M', 'stock' => '3'], ['size' => 'G', 'stock' => '0'], ['size' => '', 'stock' => '']]];
+$n = static fn (string $t) => (int) Db::one("SELECT COUNT(*) c FROM $t")['c'];
+foreach (['preço inválido' => ['price' => 'abc'], 'sem tamanho' => ['new' => [['size' => '', 'stock' => '']]], 'tamanho repetido' => ['new' => [['size' => 'M', 'stock' => '1'], ['size' => 'm', 'stock' => '1']]], 'estoque negativo' => ['new' => [['size' => 'M', 'stock' => '-1']]]] as $label => $over) {
+    [$s] = $send($adm, '/admin/loja/novo', $prod($over));
+    check("produto recusado: $label (422)", $s === 422 && $n('products') === 0, "status=$s");
+}
+[$s] = $c1->post('/admin/loja/novo', $prod(), '/app/loja');
+[$s2] = $tr1->req('GET', '/admin/loja');
+check('aluno e treinador não administram a loja', $s === 403 && $s2 !== 200 && $n('products') === 0);
+$tmpPng = tempnam(sys_get_temp_dir(), 'loja') . '.png';
+imagepng(imagecreatetruecolor(400, 400), $tmpPng);
+[$s] = $send($adm, '/admin/loja/novo', $prod());
+check('produto sem foto é recusado (422)', $s === 422 && $n('products') === 0);
+[$s] = $send($adm, '/admin/loja/novo', $prod(), $tmpPng);
+$p = Db::one('SELECT * FROM products');
+check('admin cadastra produto com foto, tamanhos e preço em centavos', $s === 303 && $p && (int) $p['price_cents'] === 8990 && $p['image_id'] && $n('product_variants') === 2);
+$vm = (int) Db::one("SELECT id FROM product_variants WHERE size = 'M'")['id'];
+$vg = (int) Db::one("SELECT id FROM product_variants WHERE size = 'G'")['id'];
+$stock = static fn (int $v) => (int) Db::one('SELECT stock FROM product_variants WHERE id = ?', [$v])['stock'];
+[$s, $b] = $c1->req('GET', '/app/loja');
+check('aluno vê o produto, o esgotado e o texto escapado', $s === 200 && str_contains($b, 'Camiseta Teste') && str_contains($b, 'G: esgotado') && !str_contains($b, '<script>x</script>'));
+$imgs = array_column(Db::all('SELECT id FROM product_images WHERE product_id = ? ORDER BY id', [$p['id']]), 'id');
+check('produto guarda várias fotos', count($imgs) === 2 && str_contains($b, "/app/loja/imagem/{$imgs[1]}"));
+[$s] = $c1->req('GET', "/app/loja/imagem/{$imgs[0]}");
+[$s2] = (new Client())->req('GET', "/app/loja/imagem/{$imgs[0]}");
+[$s3] = (new Client())->req('GET', "/api/v1/public/imagem/{$p['image_id']}");
+check('foto do produto só para aluno logado', $s === 200 && $s2 === 303 && $s3 === 404);
+$cartAdd = static fn (Client $c, int $v, string $q) => $c->post('/app/loja/carrinho', ['variant_id' => (string) $v, 'qty' => $q], '/app/loja');
+$cartAdd($c1, $vm, '4'); $cartAdd($c1, $vg, '1');
+[$s, $b] = $c1->req('GET', '/app/loja/carrinho');
+check('não põe no carrinho além do estoque', str_contains($b, 'carrinho está vazio'));
+$cartAdd($c1, $vm, '2');
+[$s, $b] = $c1->req('GET', '/app/loja/carrinho');
+check('carrinho mostra o total', str_contains($b, '179,80'));
+$buy = static fn (Client $c, array $o = []) => $c->post('/app/loja/pedido', $o + ['method' => 'on_delivery', 'total' => '17980'], '/app/loja/carrinho');
+$buy($c1, ['method' => 'pix']);
+check('forma não configurada é recusada', $n('orders') === 0);
+$adm->post('/admin/loja/pagamento', ['pix_key' => 'chave-pix-teste', 'pix_holder' => 'Recebedor Teste', 'card_link' => 'javascript:alert(1)', 'allow_on_delivery' => '1'], '/admin/loja');
+check('link de pagamento que não é https é recusado', $n('shop_settings') === 0);
+$adm->post('/admin/loja/pagamento', ['pix_key' => 'chave-pix-teste', 'pix_holder' => 'Recebedor Teste', 'card_link' => 'https://pagamento.example.com/x', 'allow_on_delivery' => '1'], '/admin/loja');
+$buy($c1, ['method' => 'pix', 'total' => '1']);
+check('total adulterado ou desatualizado é recusado', $n('orders') === 0);
+[$s] = $buy($c1, ['method' => 'pix']);
+$oid = (int) (Db::one('SELECT id FROM orders')['id'] ?? 0);
+check('pedido registrado e estoque reservado', $s === 303 && $oid > 0 && $stock($vm) === 1);
+[$s, $b] = $c1->req('GET', "/app/pedidos/$oid");
+check('aluno vê a chave Pix informada pelo admin', str_contains($b, 'chave-pix-teste') && str_contains($b, 'Aguardando pagamento'));
+[$s] = $c2->req('GET', "/app/pedidos/$oid");
+[$s2] = $c2->post("/app/pedidos/$oid/cancelar", [], '/app/pedidos');
+check('outro aluno não vê nem cancela o pedido (404)', $s === 404 && $s2 === 404 && $stock($vm) === 1);
+$cartAdd($c2, $vm, '1');
+Db::run('UPDATE product_variants SET stock = 0 WHERE id = ?', [$vm]);
+$buy($c2, ['total' => '8990']);
+check('sem estoque na hora do pedido: nada é vendido', $n('orders') === 1 && $stock($vm) === 0 && $n('order_items') === 1);
+Db::run('UPDATE product_variants SET stock = 1 WHERE id = ?', [$vm]);
+// edição do estoque com a tela desatualizada: aplica a diferença
+$send($adm, "/admin/loja/{$p['id']}", ['name' => 'Camiseta Teste', 'price' => '99,00', 'active' => '1', '_end' => '1', 'stock' => [$vm => '8', $vg => '0'], 'stock_before' => [$vm => '3', $vg => '0']]);
+check('reposição soma a diferença sem apagar a venda', $stock($vm) === 6);
+check('preço novo não muda o pedido já feito', (int) Db::one('SELECT total_cents FROM orders WHERE id = ?', [$oid])['total_cents'] === 17980);
+$act = static fn (string $a, array $o = []) => $adm->post("/admin/pedidos/$oid", ['action' => $a] + $o, "/admin/pedidos/$oid");
+$order = static fn () => Db::one('SELECT * FROM orders WHERE id = ?', [$oid]);
+[$s] = $c1->post("/admin/pedidos/$oid", ['action' => 'pay'], '/app/pedidos');
+check('aluno não marca o próprio pedido como pago (403)', $s === 403 && $order()['paid_at'] === null);
+$act('pay');
+$c1->post("/app/pedidos/$oid/cancelar", [], "/app/pedidos/$oid");
+$act('cancel');
+check('pedido pago não é cancelado', $order()['paid_at'] !== null && $order()['cancelled_at'] === null);
+$act('deliver');
+[$s, $b] = $adm->req('GET', '/admin/vendas');
+check('relatório de vendas: vendido, recebido e por tamanho', $s === 200 && str_contains($b, '179,80') && str_contains($b, '2 un.') && !str_contains($b, 'Cida Compradora'));
+[$s] = $c1->req('GET', '/admin/vendas');
+check('relatório de vendas é só do admin (403)', $s === 403);
+$cartAdd($c2, $vm, '0');
+[$s] = $buy($c2, ['total' => '9900', 'method' => 'card_link']);
+$o2 = (int) Db::one('SELECT MAX(id) id FROM orders')['id'];
+[$s, $b] = $c2->req('GET', "/app/pedidos/$o2");
+check('cartão: mostra o link https configurado', $o2 > $oid && str_contains($b, 'https://pagamento.example.com/x'));
+$before = $stock($vm);
+$c2->post("/app/pedidos/$o2/cancelar", [], "/app/pedidos/$o2");
+$c2->post("/app/pedidos/$o2/cancelar", [], "/app/pedidos/$o2");
+check('cancelar devolve o estoque uma única vez', $stock($vm) === $before + 1);
+$send($adm, "/admin/loja/{$p['id']}", ['name' => 'Camiseta Teste', 'price' => '99,00', '_end' => '1', 'stock' => [$vm => '6', $vg => '0'], 'stock_before' => [$vm => '6', $vg => '0']]);
+[$s, $b] = $c1->req('GET', '/app/loja');
+check('produto oculto sai da loja; o pedido antigo continua', !str_contains($b, 'Camiseta Teste') && $c1->req('GET', "/app/pedidos/$oid")[0] === 200);
+
+$ep = "/admin/loja/{$p['id']}";
+$left = static fn () => (int) Db::one('SELECT COUNT(*) c FROM product_images WHERE product_id = ?', [$p['id']])['c'];
+[$s] = $c1->post("/admin/loja/imagem/{$imgs[0]}/excluir", [], '/app/loja');
+check('aluno não exclui foto (403)', $s === 403 && $left() === 2);
+$adm->post("/admin/loja/imagem/{$imgs[0]}/excluir", [], $ep);
+$cover = Db::one('SELECT p.image_id, i.media_id FROM products p JOIN product_images i ON i.product_id = p.id WHERE p.id = ?', [$p['id']]);
+check('admin exclui uma foto; a outra vira capa', $left() === 1 && (int) $cover['image_id'] === (int) $cover['media_id']);
+$adm->post("/admin/loja/imagem/{$imgs[1]}/excluir", [], $ep);
+check('a última foto não pode ser excluída', $left() === 1);
+
+$del = static fn (Client $c, int $id) => $c->post("/admin/loja/$id/excluir", [], '/app/loja');
+[$s] = $del($c1, (int) $p['id']);
+check('aluno não exclui produto (403)', $s === 403 && $n('products') === 1);
+$send($adm, '/admin/loja/novo', $prod(['name' => 'Boné Sem Venda']), $tmpPng);
+$novo = (int) Db::one("SELECT id FROM products WHERE name = 'Boné Sem Venda'")['id'];
+$adm->post("/admin/loja/$novo/excluir", [], '/admin/loja');
+check('produto sem pedido é apagado, com os tamanhos', $n('products') === 1 && (int) Db::one('SELECT COUNT(*) c FROM product_variants WHERE product_id = ?', [$novo])['c'] === 0);
+$adm->post("/admin/loja/{$p['id']}/excluir", [], '/admin/loja');
+[$s, $b] = $adm->req('GET', '/admin/loja');
+[$s2] = $adm->req('GET', "/admin/loja/{$p['id']}");
+check('produto vendido sai da lista e fica no histórico', !str_contains($b, 'Camiseta Teste') && $s2 === 404 && $n('products') === 1);
+[$s, $b] = $adm->req('GET', '/admin/vendas');
+check('relatório e pedido antigo continuam depois da exclusão', str_contains($b, 'Camiseta Teste') && $c1->req('GET', "/app/pedidos/$oid")[0] === 200);
+
+echo "Excluir conta de atleta\n";
+Db::run('DELETE FROM rate_events');
+$adm = new Client(); $adm->post('/entrar', ['email' => 'adm@example.com', 'password' => 'senha-staff-12345']);
+$mkA = static function (string $email) use ($uid): int { Db::run('DELETE FROM rate_events'); $c = new Client(); register($c, ['email' => $email, 'name' => 'Atleta Apagar']); return $uid($email); };
+$delA = static fn (int $id) => $adm->post("/admin/usuarios/$id/excluir", [], "/admin/atletas/$id");
+$limpo = $mkA('apagar1@example.com');
+[$s] = $delA($limpo);
+check('atleta sem histórico: apagado de verdade', $s === 303 && !Db::one('SELECT id FROM users WHERE id = ?', [$limpo]));
+$com = $mkA('apagar2@example.com');
+Db::run("INSERT INTO orders (athlete_id, payment_method, total_cents) VALUES (?,'pix',1000)", [$com]);
+$delA($com);
+check('com pedido em aberto: recusa', Db::one('SELECT deleted_at d FROM users WHERE id = ?', [$com])['d'] === null);
+Db::run('UPDATE orders SET paid_at = NOW(), delivered_at = NOW() WHERE athlete_id = ?', [$com]);
+Db::run("INSERT INTO athlete_profiles (user_id, phone) VALUES (?, '11999990000')", [$com]);
+[$s] = $delA($com);
+$row = Db::one('SELECT status, deleted_at, email, name FROM users WHERE id = ?', [$com]);
+check('com histórico: desativa, marca como excluído e libera o e-mail', $s === 303 && $row['status'] === 'blocked' && $row['deleted_at'] !== null && str_ends_with($row['email'], '@conta.invalid') && str_contains($row['name'], '(excluído)'));
+check('mantém o pedido e apaga os dados do perfil', Db::one('SELECT id FROM orders WHERE athlete_id = ?', [$com]) !== null && !Db::one('SELECT user_id FROM athlete_profiles WHERE user_id = ?', [$com]));
+[$s, $b] = $adm->req('GET', '/admin/atletas');
+check('atleta excluído sai da lista e a página dá 404', !str_contains($b, "/admin/atletas/$com\"") && $adm->req('GET', "/admin/atletas/$com")[0] === 404);
+
+echo "Loja do treinador\n";
+Db::run('DELETE FROM rate_events');
+$adm = new Client(); $adm->post('/entrar', ['email' => 'adm@example.com', 'password' => 'senha-staff-12345']);
+$adm->post('/admin/treinadores', ['name' => 'Coach Loja', 'email' => 'coachloja@example.com', 'temp_password' => 'provisoria-2026'], '/admin/treinadores');
+$tl = new Client(); $tl->post('/entrar', ['email' => 'coachloja@example.com', 'password' => 'provisoria-2026']);
+$tl->post('/trocar-senha', ['password' => 'senha-do-coach-1', 'password2' => 'senha-do-coach-1']);
+$tlid = $uid('coachloja@example.com');
+$rc = tempnam(sys_get_temp_dir(), 'rc') . '.png';
+imagepng(imagecreatetruecolor(100, 100), $rc);
+$send($adm, '/admin/loja/novo', $prod(['name' => 'Regata Coach']), $rc);
+$vr = (int) Db::one("SELECT v.id FROM product_variants v JOIN products p ON p.id = v.product_id WHERE p.name = 'Regata Coach' AND v.size = 'M'")['id'];
+[$s, $b] = $tl->req('GET', '/treinador/loja');
+check('treinador vê a loja, com links da própria área', $s === 200 && str_contains($b, 'Regata Coach') && str_contains($b, 'action="/treinador/loja/carrinho"') && !str_contains($b, '"/app/'));
+$tl->post('/treinador/loja/carrinho', ['variant_id' => (string) $vr, 'qty' => '1'], '/treinador/loja');
+[$s] = $tl->post('/treinador/loja/pedido', ['method' => 'on_delivery', 'total' => '8990'], '/treinador/loja/carrinho');
+$ot = (int) (Db::one('SELECT id FROM orders WHERE athlete_id = ?', [$tlid])['id'] ?? 0);
+check('treinador faz pedido', $s === 303 && $ot > 0 && $tl->req('GET', "/treinador/pedidos/$ot")[0] === 200);
+check('não vê pedido de outra pessoa (404) nem a área do atleta (403)', $tl->req('GET', "/treinador/pedidos/$oid")[0] === 404 && $tl->req('GET', '/app/loja')[0] === 403);
+$adm->post("/admin/usuarios/$tlid/excluir", [], "/admin/treinadores/$tlid");
+check('treinador com pedido em aberto não é excluído', Db::one('SELECT deleted_at d FROM users WHERE id = ?', [$tlid])['d'] === null);
+$tl->post("/treinador/pedidos/$ot/cancelar", [], "/treinador/pedidos/$ot");
+check('treinador cancela o próprio pedido', Db::one('SELECT cancelled_at c FROM orders WHERE id = ?', [$ot])['c'] !== null);
+
+echo "Promoção\n";
+Db::run('DELETE FROM rate_events');
+$adm = new Client(); $adm->post('/entrar', ['email' => 'adm@example.com', 'password' => 'senha-staff-12345']);
+$pimg = tempnam(sys_get_temp_dir(), 'pr') . '.png';
+imagepng(imagecreatetruecolor(1200, 600), $pimg);
+$vid = tempnam(sys_get_temp_dir(), 'pv') . '.mp4';
+file_put_contents($vid, "\0\0\0\x20ftypisom\0\0\x02\0isomiso2avc1mp41" . str_repeat("\0", 2000));
+$bad = tempnam(sys_get_temp_dir(), 'pb') . '.mp4';
+file_put_contents($bad, '<?php echo 1; ?>');
+$promoSend = static function (array $fields, ?string $file, string $path = '/admin/promocao/novo') use ($adm): array {
+    $fields['_csrf'] = $adm->csrf('/admin/promocao/novo');
+    if ($file !== null) {
+        $fields['media'] = new CURLFile($file, 'application/octet-stream', basename($file));
+    }
+    $ch = curl_init('http://127.0.0.1:8099' . $path);
+    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 20, CURLOPT_COOKIEFILE => $adm->jar, CURLOPT_COOKIEJAR => $adm->jar, CURLOPT_POST => true, CURLOPT_POSTFIELDS => $fields]);
+    curl_exec($ch);
+    $s = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+    curl_close($ch);
+    return [$s];
+};
+$pf = static fn (array $o = []) => $o + ['title' => 'Oferta <b>', 'body' => '', 'button_label' => '', 'link_url' => '', 'start_date' => date('Y-m-d', strtotime('-1 day')), 'start_time' => '00:00', 'end_date' => date('Y-m-d', strtotime('+2 days')), 'end_time' => '23:59', 'enabled' => '1', '_end' => '1'];
+$np = static fn () => (int) Db::one('SELECT COUNT(*) c FROM promotions')['c'];
+$pub = static function (): array { [$s, $b] = (new Client())->req('GET', '/api/v1/public/promocao'); return (array) (json_decode($b, true) ?? []); };
+check('sem promoção, o site recebe vazio', $pub() === ['promo' => null]);
+foreach (['sem arquivo' => [[], null], 'fim antes do início' => [['end_date' => date('Y-m-d', strtotime('-3 days'))], $pimg], 'link javascript' => [['button_label' => 'Ver', 'link_url' => 'javascript:alert(1)'], $pimg], 'arquivo que não é mídia' => [[], $bad]] as $label => [$over, $file]) {
+    [$s] = $promoSend($pf($over), $file);
+    check("promoção recusada: $label (422)", $s === 422 && $np() === 0, "status=$s");
+}
+[$s] = $tr1->req('GET', '/admin/promocao');
+check('só o admin administra promoções', $s !== 200);
+[$s] = $promoSend($pf(['button_label' => 'Ver planos', 'link_url' => '#planos']), $pimg);
+$pid = (int) (Db::one('SELECT id FROM promotions')['id'] ?? 0);
+$d = $pub()['promo'] ?? [];
+check('no período: o site recebe título, fim e imagem', $s === 303 && ($d['type'] ?? '') === 'image' && ($d['link'] ?? '') === '#planos' && str_contains((string) ($d['endsAt'] ?? ''), '-03:00'));
+[$s] = (new Client())->req('GET', "/api/v1/public/promocao/midia/$pid");
+check('mídia pública enquanto está no ar', $s === 200);
+Db::run('UPDATE promotions SET ends_at = NOW() - INTERVAL 1 MINUTE WHERE id = ?', [$pid]);
+check('encerrada: some do site e a mídia dá 404', $pub() === ['promo' => null] && (new Client())->req('GET', "/api/v1/public/promocao/midia/$pid")[0] === 404);
+Db::run('UPDATE promotions SET starts_at = NOW() + INTERVAL 1 DAY, ends_at = NOW() + INTERVAL 2 DAY WHERE id = ?', [$pid]);
+check('agendada: ainda não aparece', $pub() === ['promo' => null]);
+[$s] = $promoSend($pf(), $vid, "/admin/promocao/$pid");
+$d = $pub()['promo'] ?? [];
+check('troca por vídeo MP4 e apaga o arquivo anterior', $s === 303 && ($d['type'] ?? '') === 'video' && (int) Db::one("SELECT COUNT(*) c FROM media WHERE id NOT IN (SELECT media_id FROM promotions) AND filename LIKE '%.mp4'")['c'] === 0);
+$ch = curl_init("http://127.0.0.1:8099/api/v1/public/promocao/midia/$pid");
+curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_RANGE => '0-99', CURLOPT_TIMEOUT => 20]);
+$part = (string) curl_exec($ch);
+check('vídeo entregue em partes (206)', (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE) === 206 && strlen($part) === 100);
+curl_close($ch);
+$adm->post("/admin/promocao/$pid/excluir", [], "/admin/promocao/$pid");
+check('excluir remove a promoção', $np() === 0 && $pub() === ['promo' => null]);
+
+echo "Promoção: desconto no anual\n";
+[$s] = $promoSend($pf(['annual_discount_pct' => '100']), $pimg);
+check('desconto inválido é recusado (422)', $s === 422 && $np() === 0, "status=$s");
+[$s] = $promoSend($pf(['annual_discount_pct' => '12,5']), $pimg);
+check('o site recebe o percentual do anual', $s === 303 && ($pub()['promo']['annualDiscountPct'] ?? null) === 12.5);
+Db::run('DELETE FROM rate_events');
+$pc = new Client(); register($pc, ['email' => 'promo@example.com', 'name' => 'Paula Promo']);
+$pu = $uid('promo@example.com');
+$by = $uid('adm@example.com');
+$contract = static function (string $product, string $period) use ($pu, $by): array {
+    $r = \Correon\Billing::create($pu, ['product' => $product, 'period' => $period, 'condition' => 'standard', 'value' => '', 'reason' => '', 'installments' => '1', 'starts_on' => date('Y-m-d'), 'first_due' => ''], $by);
+    $row = $r['id'] ? Db::one('SELECT price_cents, condition_reason FROM contracts WHERE id = ?', [$r['id']]) : ['price_cents' => $r['error'], 'condition_reason' => null];
+    Db::run("UPDATE contracts SET status = 'cancelled' WHERE athlete_id = ?", [$pu]);
+    return $row + ['id' => $r['id']];
+};
+$table = \Correon\Billing::priceTable();
+$k = $contract('corrida+musculacao', 'anual');
+check('contrato anual sai com o desconto sobre o preço de combo', (int) $k['price_cents'] === (int) round($table['corrida+musculacao']['anual']['total'] * 0.875) && str_contains((string) $k['condition_reason'], '12,5%'), json_encode($k));
+// renovação com a promoção ainda no ar: volta ao preço de tabela
+Db::run("UPDATE contracts SET status = 'active' WHERE id = ?", [$k['id']]);
+$rn = \Correon\Billing::renew((int) $k['id'], $by);
+$new = Db::one('SELECT price_cents, condition_reason FROM contracts WHERE id = ?', [(int) $rn['id']]);
+check('renovação de contrato promocional volta ao preço de tabela', $new !== null && (int) $new['price_cents'] === $table['corrida+musculacao']['anual']['total'] && $new['condition_reason'] === null
+    && (int) Db::one('SELECT SUM(amount_cents) s FROM charges WHERE contract_id = ?', [(int) $rn['id']])['s'] === $table['corrida+musculacao']['anual']['total'], json_encode([$rn, $new]));
+Db::run("UPDATE contracts SET status = 'cancelled' WHERE athlete_id = ?", [$pu]);
+$k = $contract('corrida', 'mensal');
+check('mensal não recebe o desconto', (int) $k['price_cents'] === $table['corrida']['mensal']['total'] && $k['condition_reason'] === null, json_encode($k));
+Db::run('UPDATE promotions SET ends_at = NOW() - INTERVAL 1 MINUTE');
+$k = $contract('triathlon', 'anual');
+check('promoção encerrada: anual volta ao preço de tabela', (int) $k['price_cents'] === $table['triathlon']['anual']['total'], json_encode($k));
 
 echo "\nResultado: $pass ok, $fail falha(s)\n";
 exit($fail ? 1 : 0);

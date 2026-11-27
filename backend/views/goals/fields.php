@@ -16,10 +16,11 @@ use Correon\Goals;
 </div>
 <label class="field">Nome<input type="text" name="name" value="<?= e($old['name']) ?>" maxlength="150" placeholder="Nome da prova ou do objetivo"></label>
 <div class="row">
-	<label class="field">Data (obrigatória para prova)<input type="date" name="target_date" value="<?= e($old['target_date']) ?>"></label>
-	<label class="field">Distância<input type="text" name="distance" value="<?= e($old['distance']) ?>" maxlength="60"></label>
+	<label class="field">Data de início (obrigatória para prova)<input type="date" name="target_date" value="<?= e($old['target_date']) ?>"></label>
+	<label class="field">Data de fim (opcional)<input type="date" name="end_date" value="<?= e($old['end_date']) ?>"></label>
 </div>
 <div class="row">
+	<label class="field">Distância<input type="text" name="distance" value="<?= e($old['distance']) ?>" maxlength="60"></label>
 	<label class="field">Cidade<input type="text" name="city" value="<?= e($old['city']) ?>" maxlength="100"></label>
-	<label class="field">Observações<input type="text" name="details" value="<?= e($old['details']) ?>" maxlength="500"></label>
 </div>
+<label class="field">Observações<input type="text" name="details" value="<?= e($old['details']) ?>" maxlength="500"></label>

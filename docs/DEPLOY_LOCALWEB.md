@@ -48,3 +48,9 @@ Crie `correon/.env` a partir de `correon/.env.example`: `APP_ENV=production`, `A
 
 ## Atualizações futuras
 Faça backup antes. `npm run deploy:package` e envie `public_html/` e `correon/` **sem apagar** `correon/.env` nem `correon/storage/`. Migração nova: `php correon/bin/migrate.php` (cron/SSH) ou execute o `.sql` novo de `correon/migrations/` no phpMyAdmin e registre: `INSERT INTO schema_migrations (filename) VALUES ('nome.sql');`
+
+## Tarefa agendada: lembrete de resultado das provas
+1. Em `correon/.env`, defina `CRON_TOKEN` com uma chave aleatória (32+ caracteres) e confira `APP_URL` e `MAIL_FROM`.
+2. No painel da LocalWeb, agende **uma vez por dia, de manhã**, a chamada: `https://SEUDOMINIO/api/v1/cron/lembretes?token=SUA_CHAVE`.
+3. A resposta é `{"enviados":N,"falhas":N}`. Cada execução envia até 100 e-mails; com mais inscritos, agende mais de uma vez no dia.
+A chave aparece nos registros de acesso do servidor: se vazar, troque-a.

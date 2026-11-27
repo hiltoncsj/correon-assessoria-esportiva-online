@@ -14,7 +14,7 @@ const indicators = [
 ];
 ---
 
-<section class="stats" aria-labelledby="stats-title">
+<section class="stats" id="equipe" aria-labelledby="stats-title">
 	<div class="stats__inner">
 		<div class="stats__intro">
 			<p class="stats__eyebrow">{eyebrow}</p>
@@ -48,6 +48,8 @@ const indicators = [
 
 <style>
 	.stats {
+		/* âncora do rodapé: o html já desconta o cabeçalho (scroll-padding-top); aqui desconta o respiro da seção */
+		scroll-margin-top: calc(var(--space-lg) - clamp(3rem, 10vw, 7rem));
 		background: var(--color-background-primary);
 		color: var(--color-text-primary);
 		padding-block: clamp(3rem, 10vw, 7rem);

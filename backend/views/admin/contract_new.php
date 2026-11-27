@@ -1,5 +1,6 @@
-<?php /** @var array $person @var array<string,string> $old @var ?string $error @var array $table */
+<?php /** @var array $person @var array<string,string> $old @var ?string $error @var array $table @var ?array{pct:float,title:string} $promo */
 use Correon\Billing;
+use Correon\Promo;
 $opts = static function (array $list, string $sel): string {
 	$h = '';
 	foreach ($list as $k => $v) { $h .= '<option value="' . e((string) $k) . '"' . ((string) $k === $sel ? ' selected' : '') . '>' . e($v) . '</option>'; }
@@ -26,6 +27,7 @@ $opts = static function (array $list, string $sel): string {
 		<label class="field">1º vencimento (vazio = início)<input type="date" name="first_due" value="<?= e($old['first_due']) ?>"></label>
 	</div>
 	<p class="muted">"Preço de tabela" usa o valor da tela Preços. "Aluno antigo" aplica R$ 120 no mensal de uma modalidade; só use para quem já era aluno.</p>
+	<?php if ($promo): ?><p class="notice" role="status">Promoção "<?= e($promo['title']) ?>" em vigor: contrato anual a "Preço de tabela" sai com <?= e(Promo::pctLabel($promo['pct'])) ?>% de desconto sobre o valor da tabela abaixo.</p><?php endif; ?>
 	<div class="actions"><button class="btn" type="submit">Criar contrato</button></div>
 </form>
 

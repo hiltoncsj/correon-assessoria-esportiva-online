@@ -13,6 +13,8 @@ $items = [
 	'personal' => ['/treinador/personal', 'Personal' . ($ptPending ? " ($ptPending)" : '')],
 	'disponibilidade' => ['/treinador/disponibilidade', 'Disponibilidade'],
 	'novidades' => ['/treinador/novidades', 'Novidades' . ($unseen ? " ($unseen)" : '')],
+	'loja' => ['/treinador/loja', 'Loja'],
+	'pedidos' => ['/treinador/pedidos', 'Meus pedidos'],
 	'senha' => ['/treinador/senha', 'Alterar senha'],
 ];
 ?>

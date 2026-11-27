@@ -390,7 +390,7 @@ final class Admin
      * vínculos antigos...): desativa a conta, tira das listas, libera o e-mail e PRESERVA o histórico.
      * Com atletas ou Personal ativos, recusa: primeiro é preciso encerrar.
      */
-    public static function deleteTrainer(int $id): never
+    private static function deleteTrainer(int $id): never
     {
         $me = self::admin();
         $trainer = self::userWithRole($id, 'trainer'); // atletas e administradores: 404
@@ -401,6 +401,11 @@ final class Admin
         $links = (int) Db::one("SELECT COUNT(DISTINCT athlete_id) c FROM trainer_athletes WHERE trainer_id = ? AND status = 'active'", [$id])['c'];
         $pt = Personal::activeAthletes($id);
         $sessions = (int) Db::one("SELECT COUNT(*) c FROM pt_sessions WHERE trainer_id = ? AND status IN ('requested','approved') AND starts_at > NOW()", [$id])['c'];
+        $orders = (int) Db::one('SELECT COUNT(*) c FROM orders WHERE athlete_id = ? AND cancelled_at IS NULL AND (paid_at IS NULL OR delivered_at IS NULL)', [$id])['c'];
+        if ($orders) {
+            Http::flash('err', "Não é possível excluir: este treinador tem $orders pedido(s) da loja em aberto.");
+            Http::redirect('/admin/treinadores/' . $id);
+        }
         if ($links || $pt || $sessions) {
             Http::flash('err', "Não é possível excluir: este treinador tem $links atleta(s) vinculado(s), $pt com Personal ativo e $sessions sessão(ões) pendente(s). Encerre os vínculos e o Personal primeiro (ou apenas bloqueie a conta).");
             Http::redirect('/admin/treinadores/' . $id);
@@ -446,6 +451,85 @@ final class Admin
         Audit::log('trainer_deleted', (int) $me['id'], 'user', $id, ['history_kept' => !$erased]);
         Http::flash('ok', $erased ? 'Conta excluída.' : 'Conta excluída. Os treinos e registros antigos foram mantidos no histórico, e o e-mail ficou livre.');
         Http::redirect('/admin/treinadores');
+    }
+
+    /** Botão "Excluir conta": atletas ou treinadores. Contas de administrador nunca (404). */
+    public static function deleteUser(int $id): never
+    {
+        self::admin();
+        $is = static fn (string $role) => Db::one('SELECT 1 ok FROM ' . self::withRole($role) . ' WHERE u.id = ?', [$id]) !== null;
+        if ($is('admin')) {
+            App::notFound();
+        }
+        $is('athlete') && !$is('trainer') ? self::deleteAthlete($id) : self::deleteTrainer($id);
+    }
+
+    /**
+     * Excluir conta de ATLETA. Recusa se houver contrato vigente, cobrança em aberto, Personal ativo ou pedido
+     * em aberto. Sem histórico: apaga. Com histórico (treinos, contratos, pagamentos, pedidos, vínculos):
+     * desativa, libera o e-mail, apaga os dados do perfil e retira a autorização de publicação.
+     */
+    private static function deleteAthlete(int $id): never
+    {
+        $me = self::admin();
+        $athlete = self::userWithRole($id, 'athlete');
+        $count = static fn (string $sql) => (int) Db::one($sql, [$id])['c'];
+        $pending = array_filter([
+            'contrato(s) vigente(s)' => $count("SELECT COUNT(*) c FROM contracts WHERE athlete_id = ? AND status = 'active' AND ends_on >= CURDATE()"),
+            'cobrança(s) em aberto' => $count("SELECT COUNT(*) c FROM charges h JOIN contracts k ON k.id = h.contract_id WHERE k.athlete_id = ? AND h.status = 'open'"),
+            'pacote(s) de Personal ativo(s)' => $count("SELECT COUNT(*) c FROM pt_packages WHERE athlete_id = ? AND status = 'active'"),
+            'sessão(ões) de Personal marcada(s)' => $count("SELECT COUNT(*) c FROM pt_sessions WHERE athlete_id = ? AND status IN ('requested','approved') AND starts_at > NOW()"),
+            'pedido(s) da loja em aberto' => $count('SELECT COUNT(*) c FROM orders WHERE athlete_id = ? AND cancelled_at IS NULL AND (paid_at IS NULL OR delivered_at IS NULL)'),
+        ]);
+        if ($pending) {
+            $list = implode(', ', array_map(static fn ($label, $n) => "$n $label", array_keys($pending), $pending));
+            Http::flash('err', "Não é possível excluir: este atleta tem $list. Encerre isso primeiro (ou apenas bloqueie a conta).");
+            Http::redirect('/admin/atletas/' . $id);
+        }
+
+        $erased = true;
+        $pdo = Db::pdo();
+        $pdo->beginTransaction();
+        try {
+            foreach (['password_resets', 'consents', 'notifications', 'user_roles', 'athlete_profiles'] as $table) {
+                Db::run("DELETE FROM $table WHERE user_id = ?", [$id]); // nomes de tabela constantes
+            }
+            foreach (['athlete_hr_zones', 'athlete_hr_settings', 'goal_participants', 'athlete_goals'] as $table) {
+                Db::run("DELETE FROM $table WHERE athlete_id = ?", [$id]);
+            }
+            Db::run('DELETE FROM users WHERE id = ?', [$id]);
+            $pdo->commit();
+        } catch (\PDOException $e) {
+            $pdo->rollBack();
+            if ($e->getCode() !== '23000') {
+                throw $e;
+            }
+            $erased = false; // há registros que dependem da conta
+        }
+        if (!$erased) {
+            $pdo->beginTransaction();
+            try {
+                Db::run("UPDATE trainer_athletes SET status = 'ended', ended_at = NOW() WHERE athlete_id = ? AND status = 'active'", [$id]);
+                Db::run('UPDATE goal_participants SET left_at = NOW() WHERE athlete_id = ? AND left_at IS NULL', [$id]);
+                // autorização de publicação retirada: conteúdos que citam o atleta saem do site
+                Db::run('UPDATE consents SET revoked_at = NOW() WHERE user_id = ? AND type = ? AND revoked_at IS NULL', [$id, 'publicacao']);
+                Db::run('DELETE FROM athlete_profiles WHERE user_id = ?', [$id]); // telefone, nascimento, emergência
+                Db::run('DELETE FROM user_roles WHERE user_id = ?', [$id]);
+                Db::run('DELETE FROM password_resets WHERE user_id = ?', [$id]);
+                Db::run(
+                    "UPDATE users SET status = 'blocked', deleted_at = NOW(), session_version = session_version + 1, must_change_password = 0,
+                       name = ?, email = ?, password_hash = ? WHERE id = ?",
+                    [mb_substr($athlete['name'], 0, 108) . ' (excluído)', "excluido-$id@conta.invalid", password_hash(bin2hex(random_bytes(24)), PASSWORD_DEFAULT), $id]
+                );
+                $pdo->commit();
+            } catch (\Throwable $e) {
+                $pdo->rollBack();
+                throw $e;
+            }
+        }
+        Audit::log('athlete_deleted', (int) $me['id'], 'user', $id, ['history_kept' => !$erased]);
+        Http::flash('ok', $erased ? 'Conta excluída.' : 'Conta excluída. Os treinos, contratos, pagamentos e pedidos antigos foram mantidos no histórico, e o e-mail ficou livre.');
+        Http::redirect('/admin/atletas');
     }
 
     // ---- relatórios e auditoria ----

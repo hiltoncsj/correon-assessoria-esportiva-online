@@ -22,7 +22,9 @@ final class Http
         header('X-Content-Type-Options: nosniff');
         header('X-Frame-Options: DENY');
         header('Referrer-Policy: no-referrer');
-        header("Content-Security-Policy: default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'");
+        // se o site estiver em outro endereço (computador local), o "Sair" precisa poder redirecionar para ele
+        $site = preg_match('#^https?://[^/\s;,]+#i', View::site(), $m) ? ' ' . $m[0] : '';
+        header("Content-Security-Policy: default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; form-action 'self'$site; frame-ancestors 'none'; base-uri 'none'");
         header('Permissions-Policy: camera=(), microphone=(), geolocation=()');
         header('Cache-Control: no-store');
         if (Env::isProd() || self::isHttps()) {
