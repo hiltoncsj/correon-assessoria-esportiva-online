@@ -199,3 +199,10 @@ Aplicado na Hero 6 (`src/data/plans.ts`). **Premissas a confirmar:** (1) valores
 - Todos os preços anuais, **somado** ao desconto do combo (calculado sobre o preço anual já com combo).
 - Vale no site (Hero 6) e no contrato anual novo a "Preço de tabela" (conta o momento da criação). 
 - **Renovação de contrato feito com o desconto volta ao preço de tabela atual** (pedido do cliente), mesmo com promoção no ar. Os demais contratos continuam renovando pelo valor anterior.
+
+## 2026-11-26 — Layout da promoção (pedido do cliente)
+- Cronômetro acima da arte; os dois ocupam uma tela. Computador e celular deitado: arte inteira à esquerda (sem corte nem margem), texto e botão à direita. Celular em pé: arte em cima, texto e botão embaixo.
+- Fundo da área: `src/assets/hero10-imagem1.jpeg`. Botão transparente, com destaque no mouse e no foco.
+- Imagem recomendada: 1920 × 1080; o envio da promoção reduz para no máximo 1920 px de largura (demais fotos: 1280).
+- Link "Pular para o conteúdo" removido do site público (perde-se o atalho de teclado).
+- Testes: `backend/storage/uploads` é a mesma do desenvolvimento; a suíte só apaga o que ela criar.

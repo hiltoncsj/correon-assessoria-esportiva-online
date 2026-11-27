@@ -6,7 +6,7 @@ Apenas uma rota estática: `/` (`src/pages/index.astro`). Âncoras na mesma pág
 
 | Âncora | Seção | Observação |
 |---|---|---|
-| `#conteudo` | `<main>` | link "Pular para o conteúdo" |
+| `#conteudo` | `<main>` | sem link no site público (o "Pular para o conteúdo" foi removido em 26/11; a área PHP mantém o dela) |
 | `#sobre` | Hero 5 | Header e Footer |
 | `#planos` | Hero 6 | Header e Footer. Botões CONTRATAR/COMEÇAR (Personal) apontam para `#contato` |
 | `#movimento` | Hero 7 | só Header ("EM MOVIMENTO") |

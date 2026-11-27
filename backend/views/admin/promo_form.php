@@ -25,7 +25,7 @@
 	<label class="field"><?= $mime !== null ? 'Trocar a imagem ou o vídeo' : 'Imagem ou vídeo' ?> — imagem JPG, PNG ou WebP (até 4 MB) ou vídeo MP4/WebM (até 30 MB)
 		<input type="file" name="media" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm">
 	</label>
-	<p class="muted">Medida ideal: <strong>1920 × 1080 px</strong> (horizontal, 16:9). A imagem preenche a tela inteira sem esticar; em telas de outro formato, as bordas são cortadas. No celular em pé aparece só a parte central (cerca de 500 px de largura): deixe o principal no centro e mantenha livres o topo (cronômetro) e a parte de baixo (texto e botão).</p>
+	<p class="muted">Medida ideal: <strong>1920 × 1080 px</strong> (horizontal, 16:9). Ela aparece inteira, abaixo do cronômetro, sem cortar nem esticar. No computador fica à esquerda, com o texto e o botão à direita; no celular em pé, o texto e o botão ficam abaixo.</p>
 
 	<div class="row">
 		<label class="field">Texto do botão (opcional)<input type="text" name="button_label" value="<?= e($old['button_label']) ?>" maxlength="40"></label>

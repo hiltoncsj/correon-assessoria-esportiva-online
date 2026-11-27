@@ -76,7 +76,7 @@
 			a.href = p.link;
 			info.append(a);
 		}
-		// texto e botão ficam sobre a imagem/vídeo
+		// texto e botão ficam ao lado da imagem/vídeo
 		if (info.childElementCount) stage.append(info);
 		box.append(bar, stage);
 
@@ -120,14 +120,13 @@
 
 <style is:global>
 	.promo {
-		position: relative;
+		display: flex;
+		flex-direction: column;
+		height: 100vh;
 		background: var(--color-background-primary);
 		color: var(--color-text-primary);
 	}
 	.promo__bar {
-		position: absolute;
-		inset: 0 0 auto 0;
-		z-index: 1;
 		display: flex;
 		flex-wrap: wrap;
 		align-items: center;
@@ -168,45 +167,51 @@
 		text-transform: uppercase;
 	}
 	.promo__stage {
-		position: relative;
-		height: 100vh;
+		/* o que sobra da tela abaixo do cronômetro: arte à esquerda, texto e botão à direita */
+		display: flex;
+		flex: 1;
+		min-height: 0;
 		overflow: hidden;
-		background: var(--color-brand-dark);
+		background: var(--color-brand-dark) url('../assets/hero10-imagem1.jpeg') center / cover no-repeat;
 	}
-	/* largura de 100% = a tela inteira sem criar rolagem horizontal (100vw somaria a barra) */
+	/* a arte encosta na esquerda e aparece inteira, sem corte nem distorção */
 	.promo__media {
 		display: block;
-		width: 100%;
+		flex: none;
+		width: auto;
 		height: 100%;
-		object-fit: cover;
+		max-width: calc(100% - 18rem);
+		margin: 0;
+		padding: 0;
+		object-fit: contain;
+		object-position: left center;
+	}
+	.promo__media:only-child {
+		max-width: 100%;
+		margin-inline: auto;
 	}
 	.promo__info {
-		position: absolute;
-		inset: auto 0 0 0;
+		flex: 1;
+		min-width: 0;
 		display: flex;
 		flex-direction: column;
 		align-items: center;
+		justify-content: center;
 		gap: var(--space-md);
-		padding: var(--space-md) var(--layout-gutter) var(--space-xl);
+		padding: var(--space-md);
 		text-align: center;
 		color: var(--color-brand-light);
-		text-shadow: 0 0.1em 0.6em var(--color-brand-dark), 0 0 0.2em var(--color-brand-dark);
-		pointer-events: none;
-	}
-	/* deixa livres os controles do vídeo */
-	video + .promo__info {
-		padding-bottom: 4.5rem;
 	}
 	.promo__text {
 		margin: 0;
 		max-width: 40rem;
-		font: 800 clamp(1.5rem, 4vw, 3rem) / 1.15 var(--font-heading);
+		font: 800 clamp(1.25rem, 3vw, 3rem) / 1.15 var(--font-heading);
 		text-transform: uppercase;
 		overflow-wrap: anywhere;
 	}
 	.promo__cta {
-		pointer-events: auto;
 		display: inline-flex;
+		justify-content: center;
 		align-items: center;
 		min-height: 3rem;
 		padding: 0 var(--space-lg);
@@ -228,12 +233,29 @@
 		border-color: var(--color-accent);
 		background: var(--color-accent);
 		color: var(--color-on-accent);
-		text-shadow: none;
 		transform: scale(1.06);
 	}
 	.promo__cta:focus-visible {
 		outline: 2px solid var(--color-brand-light);
 		outline-offset: 3px;
+	}
+	/* tela em pé: não cabe lado a lado; a arte ocupa a largura e o texto e o botão ficam abaixo */
+	@media (max-aspect-ratio: 1/1) {
+		.promo {
+			height: auto;
+		}
+		.promo__stage {
+			flex: none;
+			flex-direction: column;
+		}
+		.promo__media {
+			width: 100%;
+			height: auto;
+			max-width: 100%;
+		}
+		.promo__info {
+			padding: var(--space-md) var(--layout-gutter) var(--space-lg);
+		}
 	}
 	@media (prefers-reduced-motion: reduce) {
 		.promo__cta {
